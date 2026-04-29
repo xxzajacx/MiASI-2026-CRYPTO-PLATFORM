@@ -1,0 +1,196 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+:root {
+  --bg: #09090b;
+  --panel-bg: rgba(24, 24, 27, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --text: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --primary: #8b5cf6;
+  --primary-glow: rgba(139, 92, 246, 0.4);
+  --success: #10b981;
+  --success-glow: rgba(16, 185, 129, 0.3);
+  --danger: #ef4444;
+  --danger-glow: rgba(239, 68, 68, 0.3);
+  --accent: #38bdf8;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  /* Premium radial background glow */
+  background-image: radial-gradient(circle at 15% 50%, var(--primary-glow), transparent 30%), 
+                    radial-gradient(circle at 85% 30%, var(--success-glow), transparent 35%);
+  background-attachment: fixed;
+  overflow-x: hidden;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: var(--panel-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.glass-panel:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4);
+}
+
+.btn {
+  background-color: transparent;
+  color: var(--text);
+  border: 1px solid var(--glass-border);
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+  border: none;
+  box-shadow: 0 4px 15px var(--primary-glow);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 6px 20px var(--primary-glow);
+  transform: translateY(-1px);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: none;
+  box-shadow: 0 4px 15px var(--success-glow);
+}
+
+.btn-success:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px var(--success-glow);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  border: none;
+  box-shadow: 0 4px 15px var(--danger-glow);
+}
+
+.btn-danger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px var(--danger-glow);
+}
+
+.input-field {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.input-field:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+h1, h2, h3, h4 {
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.text-gradient {
+  background: linear-gradient(to right, var(--accent), var(--primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+.text-muted { color: var(--text-muted); }
+
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.flex-column { display: flex; flex-direction: column; gap: 16px; }
+
+/* Dashboard layout */
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.grid {
+  display: grid;
+  gap: 24px;
+}
+
+.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+/* Simple Table Styling for Logs/Orders */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+th {
+  padding: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--glass-border);
+}
+td {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+tr:last-child td {
+  border-bottom: none;
+}
+
+/* Fix select option styles for dark mode */
+select option {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+/* Hide number input spin buttons */
+input[type="number"]::-webkit-inner-spin-button, 
+input[type="number"]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+input[type="number"] {
+  -moz-appearance: textfield; /* Firefox */
+}

@@ -30,6 +30,7 @@ function App() {
   const [passwordScore, setPasswordScore] = useState(0);
   const [totpCode, setTotpCode] = useState('');
   const [qrUrl, setQrUrl] = useState('');
+  const [totpSecret, setTotpSecret] = useState('');
   
   // Auth tokens
   const [tempToken, setTempToken] = useState('');
@@ -70,6 +71,7 @@ function App() {
     setLastName('');
     setBirthDate('');
     setTotpCode('');
+    setTotpSecret('');
     setStage('LOGIN');
   };
 
@@ -129,7 +131,7 @@ function App() {
     e.preventDefault();
     setErrorMsg('');
     try {
-      const res = await axios.post(`${API_URL}/auth/register`, { 
+      const res = await axios.post(`${API_URL}/auth/register-init`, { 
         username, 
         password,
         first_name: firstName,
@@ -137,9 +139,34 @@ function App() {
         birth_date: birthDate
       });
       setQrUrl(res.data.totp_uri);
+      setTotpSecret(res.data.totp_secret);
+      setTotpCode('');
       setStage('QR');
     } catch (err) {
       setErrorMsg(err.response?.data?.detail || 'Błąd rejestracji');
+    }
+  };
+
+  const handleVerifyRegister = async () => {
+    setErrorMsg('');
+    if (!totpCode || totpCode.length !== 6) {
+      setErrorMsg('Wpisz poprawny 6-cyfrowy kod z aplikacji Google Authenticator');
+      return;
+    }
+    try {
+      const res = await axios.post(`${API_URL}/auth/register-verify`, {
+        username,
+        password,
+        first_name: firstName,
+        last_name: lastName,
+        birth_date: birthDate,
+        totp_secret: totpSecret,
+        totp_code: totpCode
+      });
+      alert('Konto zostało utworzone! Możesz się teraz zalogować.');
+      setStage('LOGIN');
+    } catch (err) {
+      setErrorMsg(err.response?.data?.detail || 'Błąd weryfikacji');
     }
   };
 
@@ -284,14 +311,17 @@ function App() {
           )}
 
           {stage === 'QR' && (
-            <div className="flex-column animate-fade-in" style={{ alignItems: 'center' }}>
-              <p style={{ fontSize: '14px', marginBottom: '16px' }}>Zeskanuj poniższy kod w aplikacji Google Authenticator</p>
-              <div style={{ background: 'white', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-                <QRCodeSVG value={qrUrl} size={200} />
-              </div>
-              <button type="button" className="btn btn-success" style={{ width: '100%' }} onClick={() => setStage('LOGIN')}>Przejdź do logowania</button>
-            </div>
-          )}
+             <div className="flex-column animate-fade-in" style={{ alignItems: 'center' }}>
+               <p style={{ fontSize: '14px', marginBottom: '16px' }}>1. Zeskanuj poniższy kod w aplikacji Google Authenticator</p>
+               <div style={{ background: 'white', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+                 <QRCodeSVG value={qrUrl} size={200} />
+               </div>
+               <p style={{ fontSize: '14px', marginBottom: '8px' }}>2. Wpisz kod z aplikacji, aby dokończyć rejestrację</p>
+               <input type="text" placeholder="000 000" className="input-field" value={totpCode} onChange={e => setTotpCode(e.target.value.replace(/\s/g, ''))} style={{ letterSpacing: '4px', textAlign: 'center', fontSize: '20px' }} required minLength={6} maxLength={6} />
+               <button type="button" className="btn btn-success" style={{ width: '100%', marginTop: '8px' }} onClick={handleVerifyRegister}>Weryfikuj i utwórz konto</button>
+               <button type="button" className="btn" style={{ marginTop: '8px' }} onClick={() => { setStage('REGISTER'); setTotpSecret(''); setErrorMsg(''); }}>Wróć</button>
+             </div>
+           )}
 
           {stage === '2FA' && (
             <form onSubmit={handle2FA} className="flex-column animate-fade-in">

@@ -70,10 +70,22 @@ class Verify2FA(BaseModel):
     temp_token: str
     totp_code: str
 
-class RegisterResponse(BaseModel):
-    message: str
+class RegisterInitResponse(BaseModel):
     totp_secret: str
     totp_uri: str
+
+class RegisterVerify(BaseModel):
+    username: str
+    password: str
+    first_name: str
+    last_name: str
+    birth_date: date
+    totp_secret: str
+    totp_code: str
+
+class RegisterResponse(BaseModel):
+    message: str
+    username: str
 
 async def check_pwned_password(password: str) -> bool:
     """Sprawdza czy hasło wyciekło w HaveIBeenPwned API."""
@@ -115,8 +127,8 @@ def check_age(birth_date: date):
     if age < 18:
         raise HTTPException(status_code=400, detail="Musisz mieć ukończone 18 lat, aby założyć konto inwestycyjne.")
 
-@router.post("/register", response_model=RegisterResponse)
-async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
+@router.post("/register-init", response_model=RegisterInitResponse)
+async def register_init(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     # 0. Check age
     check_age(user_data.birth_date)
 
@@ -124,7 +136,6 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     if result.scalars().first():
         raise HTTPException(status_code=400, detail="Username already registered")
 
-    
     # 1. Check complexity
     check_password_complexity(user_data.password)
     
@@ -133,29 +144,56 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     if is_pwned:
         raise HTTPException(status_code=400, detail="To hasło wyciekło w znanych naruszeniach bezpieczeństwa. Wybierz inne.")
     
-    hashed_password = get_password_hash(user_data.password)
+    # Generate TOTP secret for QR code
     totp_secret = generate_totp_secret()
+    totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=user_data.username, issuer_name="Gielda App")
+    
+    return {
+        "totp_secret": totp_secret,
+        "totp_uri": totp_uri
+    }
+
+@router.post("/register-verify", response_model=RegisterResponse)
+async def register_verify(data: RegisterVerify, db: AsyncSession = Depends(get_db)):
+    # Verify TOTP code first
+    if not verify_totp(data.totp_secret, data.totp_code):
+        raise HTTPException(status_code=400, detail="Invalid TOTP code. Please check your Google Authenticator app.")
+    
+    # Check if username still available
+    result = await db.execute(select(User).filter(User.username == data.username))
+    if result.scalars().first():
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    # Check age again
+    check_age(data.birth_date)
+    
+    # Check password complexity again
+    check_password_complexity(data.password)
+    
+    # Check HaveIBeenPwned again
+    is_pwned = await check_pwned_password(data.password)
+    if is_pwned:
+        raise HTTPException(status_code=400, detail="To hasło wyciekło w znanych naruszeniach bezpieczeństwa. Wybierz inne.")
+    
+    # Create user account
+    hashed_password = get_password_hash(data.password)
     
     new_user = User(
-        username=user_data.username,
+        username=data.username,
         hashed_password=hashed_password,
-        totp_secret=totp_secret,
-        first_name=user_data.first_name,
-        last_name=user_data.last_name,
-        birth_date=user_data.birth_date
+        totp_secret=data.totp_secret,
+        first_name=data.first_name,
+        last_name=data.last_name,
+        birth_date=data.birth_date
     )
     db.add(new_user)
 
     await db.commit()
     await db.refresh(new_user)
-
-    # Generate TOTP provisioning URI for QR code generation
-    totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=user_data.username, issuer_name="Gielda App")
     
     return {
         "message": "User registered successfully",
-        "totp_secret": totp_secret,
-        "totp_uri": totp_uri
+        "username": new_user.username
     }
 
 @router.post("/login", response_model=Token)

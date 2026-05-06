@@ -8,10 +8,9 @@ from .config import settings
 pwd_context = CryptContext(
     schemes=["argon2"],
     deprecated="auto",
-    argon2__type="argon2id",
-    argon2__time_cost=2,  # OWASP recommended iteration count
-    argon2__memory_cost=19456,  # 19 MiB (OWASP minimum)
-    argon2__parallelism=1,  # OWASP recommended parallelism
+    argon2__time_cost=2,
+    argon2__memory_cost=19456,
+    argon2__parallelism=1,
 )
 
 def verify_password(plain_password, hashed_password):

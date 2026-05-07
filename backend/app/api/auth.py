@@ -105,8 +105,8 @@ async def check_pwned_password(password: str) -> bool:
 
 def check_password_complexity(password: str):
     """Sprawdza czy hasło spełnia minimalne kryteria OWASP ASVS i wystarczającą entropię."""
-    if len(password) < 8:
-        raise HTTPException(status_code=400, detail="Hasło musi mieć co najmniej 8 znaków.")
+    if len(password) < 12:
+        raise HTTPException(status_code=400, detail="Hasło musi mieć co najmniej 12 znaków.")
     if not any(char.isdigit() for char in password):
         raise HTTPException(status_code=400, detail="Hasło musi zawierać co najmniej jedną cyfrę.")
     if not any(char.isupper() for char in password):

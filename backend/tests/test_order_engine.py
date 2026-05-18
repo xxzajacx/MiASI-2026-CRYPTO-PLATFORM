@@ -1,5 +1,6 @@
 import pytest
 from sqlalchemy.future import select
+from datetime import date
 from app.models.order import Order
 from app.models.wallet import Wallet
 from app.models.user import User
@@ -13,10 +14,11 @@ engine_module.AsyncSessionLocal = TestingSessionLocal
 
 @pytest.mark.asyncio
 async def test_stop_loss_execution_success(db_session):
-    # Setup test user and wallet
-    user = User(username="testuser", hashed_password="hashed_pw")
+    """Test Stop-Loss order execution when price drops below target."""
+    user = User(username="testuser", hashed_password="hashed_pw", first_name="Test", last_name="User", birth_date="2000-01-01")
     db_session.add(user)
     await db_session.commit()
+    await db_session.refresh(user)
     
     # Przeznaczamy 2 zablokowane BTC na pokrycie SL Stop-Loss
     wallet_btc = Wallet(user_id=user.id, asset_symbol="BTC", balance=0.0, locked_balance=2.0)
@@ -46,9 +48,11 @@ async def test_stop_loss_execution_success(db_session):
 
 @pytest.mark.asyncio
 async def test_take_profit_execution_success(db_session):
-    user = User(username="tp_user", hashed_password="123")
+    """Test Take-Profit order execution when price rises above target."""
+    user = User(username="tp_user", hashed_password="123", first_name="TP", last_name="User", birth_date="2000-01-01")
     db_session.add(user)
     await db_session.commit()
+    await db_session.refresh(user)
     
     wallet_btc = Wallet(user_id=user.id, asset_symbol="BTC", balance=0.0, locked_balance=0.5)
     db_session.add(wallet_btc)
@@ -71,9 +75,11 @@ async def test_take_profit_execution_success(db_session):
 
 @pytest.mark.asyncio
 async def test_order_ignored_when_conditions_not_met(db_session):
-    user = User(username="user3", hashed_password="pwd")
+    """Test that order is not executed when price conditions are not met."""
+    user = User(username="user3", hashed_password="pwd", first_name="User", last_name="Three", birth_date="2000-01-01")
     db_session.add(user)
     await db_session.commit()
+    await db_session.refresh(user)
     
     order = Order(user_id=user.id, symbol="BTCUSDT", order_type="STOP_LOSS", amount=1.0, target_price=40000.0)
     db_session.add(order)
@@ -88,9 +94,11 @@ async def test_order_ignored_when_conditions_not_met(db_session):
 
 @pytest.mark.asyncio
 async def test_order_fails_on_insufficient_wallet(db_session):
-    user = User(username="user4", hashed_password="pwd")
+    """Test order fails when wallet has insufficient locked balance."""
+    user = User(username="user4", hashed_password="pwd", first_name="User", last_name="Four", birth_date="2000-01-01")
     db_session.add(user)
     await db_session.commit()
+    await db_session.refresh(user)
     
     # Tylko 0.1 w portfelu lockowanym a order zakłada sprzedaż 1.0!
     wallet_btc = Wallet(user_id=user.id, asset_symbol="BTC", balance=0.0, locked_balance=0.1)

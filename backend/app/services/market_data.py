@@ -1,3 +1,5 @@
+"""Service for fetching and managing market data from Binance."""
+
 import asyncio
 import httpx
 import logging
@@ -136,6 +138,22 @@ class BinanceClient:
             
             params = {"symbol": symbol, "side": side.upper(), "type": "MARKET", "quantity": amount}
             return await self._signed_request("POST", self.futures_url, "/fapi/v1/order", params)
+
+    async def execute_market_buy(self, symbol: str, quantity: float) -> dict:
+        """Execute a market BUY order on Binance Spot and return normalized result."""
+        result = await self.execute_trade(symbol, "BUY", quantity, leverage=1)
+        # Normalize response fields for the trading endpoint
+        return {
+            "order_id": result.get("orderId", 0),
+            "symbol": result.get("symbol", symbol),
+            "executed_qty": float(result.get("executedQty", quantity)),
+            "cummulative_quote_qty": float(result.get("cummulativeQuoteQty", 0)),
+            "fills": result.get("fills", []),
+        }
+
+    async def execute_market_sell(self, symbol: str, quantity: float) -> dict:
+        """Execute a market SELL order on Binance Spot and return raw result."""
+        return await self.execute_trade(symbol, "SELL", quantity, leverage=1)
 
     async def fetch_all_prices(self) -> dict:
         """Retrieve current ticker prices for tracked symbols."""

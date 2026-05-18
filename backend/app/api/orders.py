@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -13,6 +14,8 @@ from app.services.market_data import market_data_service
 from app.core.config import settings
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 class OrderCreate(BaseModel):
     symbol: str
@@ -111,9 +114,20 @@ async def create_order(
                 detail="Invalid target price for TAKE_PROFIT: must be higher than current market price"
             )
 
-    # Check user has sufficient balance on Binance
+    # Check user has sufficient balance on Binance and lock assets locally
     try:
-        binance_balances = await market_data_service.get_account_balance()
+        user_api_key = current_user.binance_api_key or market_data_service.api_key
+        user_secret_key = current_user.binance_secret_key or market_data_service.api_secret
+        
+        if current_user.binance_api_key:
+            from app.services.market_data import BinanceClient
+            user_client = BinanceClient()
+            user_client.api_key = user_api_key
+            user_client.api_secret = user_secret_key
+            user_client.headers = {"X-MBX-APIKEY": user_api_key}
+            binance_balances = await user_client.get_account_balance()
+        else:
+            binance_balances = await market_data_service.get_account_balance()
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Failed to verify balance with Binance: {str(e)}")
 
@@ -127,6 +141,27 @@ async def create_order(
             status_code=400,
             detail=f"Musisz najpierw kupić krypto. Insufficient {base_asset} balance on Binance. Available: {free_balance}, Required: {order_req.amount}"
         )
+
+    # Lock assets in local wallet
+    from app.models.wallet import Wallet
+    res = await db.execute(select(Wallet).where(Wallet.user_id == current_user.id, Wallet.asset_symbol == base_asset))
+    asset_wallet = res.scalars().first()
+    
+    if not asset_wallet:
+        asset_wallet = Wallet(user_id=current_user.id, asset_symbol=base_asset, balance=order_req.amount, locked_balance=0.0)
+        db.add(asset_wallet)
+        await db.commit()
+        await db.refresh(asset_wallet)
+    
+    if asset_wallet.balance < order_req.amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient {base_asset} balance in local wallet. Available: {asset_wallet.balance}, Required: {order_req.amount}"
+        )
+    
+    # Lock the assets
+    asset_wallet.balance -= order_req.amount
+    asset_wallet.locked_balance += order_req.amount
 
     # Create order record
     new_order = Order(
@@ -157,6 +192,18 @@ async def cancel_order(
     
     if order.status != "ACTIVE":
         raise HTTPException(status_code=400, detail="Only active orders can be cancelled")
+
+    # Unlock assets when cancelling order
+    from app.models.wallet import Wallet
+    base_asset = order.symbol.replace("USDT", "")
+    res = await db.execute(select(Wallet).where(Wallet.user_id == current_user.id, Wallet.asset_symbol == base_asset))
+    asset_wallet = res.scalars().first()
+    
+    if asset_wallet and asset_wallet.locked_balance >= order.amount:
+        asset_wallet.locked_balance -= order.amount
+        asset_wallet.balance += order.amount
+    else:
+        logger.warning(f"Could not unlock assets for order {order.id}: insufficient locked balance")
 
     # Update order status to cancelled
     order.status = "CANCELLED"

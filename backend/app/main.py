@@ -2,8 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .api import api_router
 from .api.trading import router as trading_router
+from .api.admin import router as admin_router
 from .core.config import settings
 from .core.database import engine, Base
+from .core.csrf import CSRFMiddleware
 import asyncio
 from .services.market_data import market_data_service
 from .services.order_engine import start_order_engine
@@ -13,16 +15,20 @@ import app.models
 
 app = FastAPI(title="Giełda API", description="Cryptocurrency Investment Platform API")
 
+# Add CSRF middleware
+app.add_middleware(CSRFMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS.split(","),
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "X-CSRF-TOKEN"],
 )
 
 app.include_router(api_router, prefix="/api")
 app.include_router(trading_router, prefix="/api/trading")
+app.include_router(admin_router, prefix="/api/admin")
 
 @app.on_event("startup")
 async def startup_event():

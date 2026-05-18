@@ -1,8 +1,11 @@
+"""Models for order management."""
+
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
 from sqlalchemy.sql import func
 from app.core.database import Base
 
 class Order(Base):
+    """Order model representing conditional trading orders."""
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)

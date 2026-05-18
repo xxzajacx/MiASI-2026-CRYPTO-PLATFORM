@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     
     # CORS
-    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
+    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://127.0.0.1:5173,http://127.0.0.1:5174")
     
     # Binance Demo Config
     BINANCE_MODE: str = os.getenv("BINANCE_MODE", "demo")
@@ -28,5 +28,15 @@ class Settings(BaseSettings):
     
     # Rate Limit
     RATE_LIMIT: int = int(os.getenv("RATE_LIMIT", "1200"))
+
+    # Email (SMTP) – used for transaction confirmation on high-value operations
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM: str = os.getenv("SMTP_FROM", "noreply@gielda.app")
+
+    # Threshold (in USDT) above which email confirmation is required for trades
+    EMAIL_CONFIRM_THRESHOLD: float = float(os.getenv("EMAIL_CONFIRM_THRESHOLD", "1000"))
 
 settings = Settings()

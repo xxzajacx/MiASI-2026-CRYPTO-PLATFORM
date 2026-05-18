@@ -43,10 +43,21 @@ async def get_portfolio(
     
     # Try to get balance from Binance first
     try:
-        if not market_data_service.api_key or not market_data_service.api_secret or "WKLEJ" in market_data_service.api_key:
+        user_api_key = current_user.binance_api_key or market_data_service.api_key
+        user_secret_key = current_user.binance_secret_key or market_data_service.api_secret
+
+        if not user_api_key or not user_secret_key or "WKLEJ" in user_api_key:
             raise ValueError("Binance API key not configured")
         
-        binance_balances = await market_data_service.get_account_balance()
+        if current_user.binance_api_key:
+            from app.services.market_data import BinanceClient
+            user_client = BinanceClient()
+            user_client.api_key = user_api_key
+            user_client.api_secret = user_secret_key
+            user_client.headers = {"X-MBX-APIKEY": user_api_key}
+            binance_balances = await user_client.get_account_balance()
+        else:
+            binance_balances = await market_data_service.get_account_balance()
         
         # Convert to response format
         wallet_list = []

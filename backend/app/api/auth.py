@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
@@ -6,9 +6,11 @@ from pydantic import BaseModel
 import pyotp
 import urllib.parse
 from datetime import timedelta, datetime
+from typing import Optional
 import httpx
 import zxcvbn
 import hashlib
+import re
 
 from app.core.database import get_db
 from app.core.security import (
@@ -19,6 +21,7 @@ from app.core.security import (
     verify_totp
 )
 from app.core.config import settings
+from app.core.csrf import generate_csrf_token, set_csrf_cookie
 from app.models.user import User
 
 router = APIRouter()
@@ -59,6 +62,7 @@ class UserCreate(BaseModel):
     first_name: str
     last_name: str
     birth_date: date
+    email: Optional[str] = None  # Optional email for trade confirmations
 
 
 class Token(BaseModel):
@@ -80,6 +84,7 @@ class RegisterVerify(BaseModel):
     first_name: str
     last_name: str
     birth_date: date
+    email: Optional[str] = None  # Optional email for trade confirmations
     totp_secret: str
     totp_code: str
 
@@ -196,14 +201,14 @@ async def register_verify(data: RegisterVerify, db: AsyncSession = Depends(get_d
         "username": new_user.username
     }
 
-@router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+@router.post("/login")
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db), response: Response = None):
     result = await db.execute(select(User).filter(User.username == form_data.username))
     user = result.scalars().first()
     
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
-
+    
     # Check account lockout status
     if user.locked_until:
         locked_time = datetime.fromisoformat(user.locked_until)
@@ -218,7 +223,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
             user.locked_until = None
             user.failed_login_attempts = 0
             await db.commit()
-
+    
     if not verify_password(form_data.password, user.hashed_password):
         user.failed_login_attempts += 1
         if user.failed_login_attempts >= 5:
@@ -249,10 +254,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
         data={"sub": user.username, "type": "temp"}, expires_delta=access_token_expires
     )
     
-    return {"access_token": temp_token, "token_type": "bearer", "is_temp": True}
+    # Set CSRF token cookie
+    csrf_token = generate_csrf_token()
+    response = Response(
+        content=f'{{"access_token": "{temp_token}", "token_type": "bearer", "is_temp": true}}',
+        media_type="application/json"
+    )
+    set_csrf_cookie(response, csrf_token)
+    
+    return response
 
-@router.post("/verify-2fa", response_model=Token)
-async def verify_2fa(data: Verify2FA, db: AsyncSession = Depends(get_db)):
+@router.post("/verify-2fa")
+async def verify_2fa(data: Verify2FA, db: AsyncSession = Depends(get_db), response: Response = None):
     import jwt
     try:
         payload = jwt.decode(data.temp_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
@@ -261,7 +274,7 @@ async def verify_2fa(data: Verify2FA, db: AsyncSession = Depends(get_db)):
         username: str = payload.get("sub")
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid temporary token")
-
+    
     result = await db.execute(select(User).filter(User.username == username))
     user = result.scalars().first()
     if not user:
@@ -275,4 +288,58 @@ async def verify_2fa(data: Verify2FA, db: AsyncSession = Depends(get_db)):
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer", "is_temp": False}
+    
+    # Set CSRF token
+    csrf_token = generate_csrf_token()
+    json_response = Response(
+        content=f'{{"access_token": "{access_token}", "token_type": "bearer", "is_temp": false}}',
+        media_type="application/json"
+    )
+    set_csrf_cookie(json_response, csrf_token)
+    
+    return json_response
+
+@router.get("/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    """Return profile information for the currently authenticated user."""
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+        "is_admin": current_user.is_admin,
+        "is_active": current_user.is_active,
+        "email": current_user.email,
+        "birth_date": str(current_user.birth_date),
+        "has_binance_keys": bool(current_user.binance_api_key and current_user.binance_secret_key),
+    }
+
+
+class BinanceKeysUpdate(BaseModel):
+    binance_api_key: str
+    binance_secret_key: str
+
+
+@router.put("/binance-keys")
+async def update_binance_keys(
+    data: BinanceKeysUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Save user's personal Binance API credentials."""
+    current_user.binance_api_key = data.binance_api_key.strip()
+    current_user.binance_secret_key = data.binance_secret_key.strip()
+    await db.commit()
+    return {"message": "Klucze Binance zostały zapisane pomyślnie."}
+
+
+@router.delete("/binance-keys")
+async def delete_binance_keys(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Remove user's personal Binance API credentials."""
+    current_user.binance_api_key = None
+    current_user.binance_secret_key = None
+    await db.commit()
+    return {"message": "Klucze Binance zostały usunięte."}

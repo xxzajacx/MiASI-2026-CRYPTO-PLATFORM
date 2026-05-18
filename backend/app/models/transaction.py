@@ -1,8 +1,11 @@
+"""Models for transaction history management."""
+
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
 from sqlalchemy.sql import func
 from app.core.database import Base
 
 class TransactionHistory(Base):
+    """Transaction history model recording all user transactions."""
     __tablename__ = "transaction_history"
 
     id = Column(Integer, primary_key=True, index=True)

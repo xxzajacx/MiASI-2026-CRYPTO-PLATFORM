@@ -1,0 +1,32 @@
+[tool.pytest]
+testpaths = ["backend/tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --cov=app --cov-report=term-missing --cov-report=html --cov-report=xml --cov-fail-under=75"
+
+[tool.pylint.MASTER]
+# Files to ignore
+ignore = ["migrations", "venv", ".venv", "env", ".env"]
+
+[tool.pylint.FORMAT]
+# Maximum number of characters on a single line.
+max-line-length = 120
+
+[tool.pylint."MESSAGES CONTROL"]
+# Disable some messages
+disable = [
+    "C0103",  # invalid-name
+    "R0913",  # too-many-arguments
+    "R0914",  # too-many-locals
+    "R0915",  # too-many-statements
+    "W0703",  # broad-except
+]
+
+[tool.pylint.REPORTS]
+# Set the output format
+output-format = "colorized"
+
+[tool.pylint.TYPECHECK]
+# List of members which are set dynamically
+generated-members = ["requests.*", "sqlalchemy.*", "pydantic.*"]

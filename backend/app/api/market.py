@@ -2,6 +2,13 @@ from fastapi import APIRouter, Query, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Optional, List
 from app.services.market_data import market_data_service
+from app.services.email_service import (
+    generate_confirmation_code,
+    send_confirmation_email,
+    store_pending_confirmation,
+    verify_confirmation,
+    requires_email_confirmation,
+)
 from app.api.auth import get_current_user
 from app.models.user import User
 from app.models.wallet import Wallet
@@ -34,6 +41,12 @@ class TradeResponse(BaseModel):
     amount: float
     total_cost: float
     order_id: Optional[str] = None
+    requires_confirmation: bool = False
+    confirmation_token: Optional[str] = None
+
+class ConfirmTradeRequest(BaseModel):
+    confirmation_token: str
+    confirmation_code: str
 
 class PricesResponse(BaseModel):
     prices: Dict[str, float]
@@ -61,7 +74,21 @@ async def execute_trade(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Execute a trade (BUY/SELL) at market price, optionally with TP/SL."""
+    """Execute a trade (BUY/SELL) at market price, optionally with TP/SL.
+
+    For high-value trades (above EMAIL_CONFIRM_THRESHOLD USDT),
+    an email confirmation code is required before execution.
+    """
+    return await _execute_trade_internal(req, current_user, db, skip_email_check=False)
+
+
+async def _execute_trade_internal(
+    req: TradeRequest,
+    current_user: User,
+    db: AsyncSession,
+    skip_email_check: bool = False
+):
+    """Core trade execution logic shared by /trade and /trade/confirm."""
     req.side = req.side.upper()
     if req.side not in ["BUY", "SELL"]:
         raise HTTPException(status_code=400, detail="Side must be BUY or SELL")
@@ -69,9 +96,6 @@ async def execute_trade(
     # Basic Validation
     if req.amount <= 0:
         raise HTTPException(status_code=400, detail="Ilość musi być większa od zera")
-    
-    if req.side not in ["BUY", "SELL"]:
-        raise HTTPException(status_code=400, detail="Nieprawidłowa strona transakcji")
 
     current_price = market_data_service.get_price(req.symbol)
     if not current_price:
@@ -85,6 +109,37 @@ async def execute_trade(
     if notional_value < 5:
         raise HTTPException(status_code=400, detail=f"Wartość zlecenia jest za niska. Minimum to 5 USDT (Obecnie: {notional_value:.2f} USDT)")
 
+    # Email confirmation gate for high-value trades
+    if not skip_email_check and requires_email_confirmation(notional_value):
+        if current_user.email:
+            code = generate_confirmation_code()
+            trade_details = (
+                f"{req.side} {req.amount} {req.symbol} "
+                f"(~{notional_value:.2f} USDT, {req.leverage}x leverage)"
+            )
+            token = store_pending_confirmation(
+                user_id=current_user.id,
+                code=code,
+                trade_data=req.model_dump(),
+            )
+            await send_confirmation_email(
+                to_email=current_user.email,
+                username=current_user.username,
+                code=code,
+                trade_details=trade_details,
+            )
+            return TradeResponse(
+                success=False,
+                message=f"Transakcja wymaga potwierdzenia e-mail. Kod wysłany na {current_user.email}.",
+                price=current_price,
+                amount=req.amount,
+                total_cost=notional_value,
+                requires_confirmation=True,
+                confirmation_token=token,
+            )
+        else:
+            logger.info(f"User {current_user.username} has no email – skipping email confirmation for high-value trade")
+
     # Handle USDT amount conversion
     if req.amount_type == "usdt":
         req.amount = req.amount / current_price
@@ -93,15 +148,30 @@ async def execute_trade(
     quote_asset = "USDT"
     total_cost = req.amount * current_price if req.side == "BUY" else req.amount
 
-    # Attempt Binance trade if keys are present
+    # Attempt Binance trade — prefer user's personal keys, fallback to global
     binance_success = False
     binance_order_id = None
     
-    if market_data_service.api_key and "WKLEJ" not in market_data_service.api_key:
+    # Determine which API keys to use
+    user_api_key = current_user.binance_api_key or market_data_service.api_key
+    user_secret_key = current_user.binance_secret_key or market_data_service.api_secret
+    
+    if user_api_key and "WKLEJ" not in user_api_key:
         try:
-            result = await market_data_service.execute_trade(
-                req.symbol, req.side, req.amount, req.leverage
-            )
+            # If user has personal keys, create a temporary client for this trade
+            if current_user.binance_api_key:
+                from app.services.market_data import BinanceClient
+                user_client = BinanceClient()
+                user_client.api_key = user_api_key
+                user_client.api_secret = user_secret_key
+                user_client.headers = {"X-MBX-APIKEY": user_api_key}
+                result = await user_client.execute_trade(
+                    req.symbol, req.side, req.amount, req.leverage
+                )
+            else:
+                result = await market_data_service.execute_trade(
+                    req.symbol, req.side, req.amount, req.leverage
+                )
             binance_success = True
             binance_order_id = str(result.get("orderId", result.get("order_id", "")))
         except Exception as e:
@@ -220,25 +290,54 @@ async def execute_trade(
 
     await db.commit()
     
-    return {
-        "success": True,
-        "message": f"Successfully executed {req.side} order",
-        "price": current_price,
-        "amount": req.amount,
-        "total_cost": req.amount * current_price if req.side == "BUY" else req.amount * current_price,
-        "order_id": binance_order_id
-    }
+    return TradeResponse(
+        success=True,
+        message=f"Successfully executed {req.side} order",
+        price=current_price,
+        amount=req.amount,
+        total_cost=req.amount * current_price,
+        order_id=binance_order_id,
+    )
 
 @router.get("/status")
-async def get_market_status():
-    is_live = (
-        market_data_service.api_key and 
-        market_data_service.api_secret and 
-        "WKLEJ" not in market_data_service.api_key
+async def get_market_status(current_user: User = Depends(get_current_user)):
+    user_api_key = current_user.binance_api_key or market_data_service.api_key
+    user_secret_key = current_user.binance_secret_key or market_data_service.api_secret
+    
+    is_live = bool(
+        user_api_key and 
+        user_secret_key and 
+        "WKLEJ" not in user_api_key
     )
     return {
         "status": "online",
-        "binance_connected": bool(is_live),
+        "binance_connected": is_live,
         "symbols": [s.strip() for s in settings.TRACKED_SYMBOLS.split(",")],
         "min_order_sizes": market_data_service.MIN_ORDER_SIZES
     }
+
+
+@router.post("/trade/confirm", response_model=TradeResponse)
+async def confirm_trade(
+    req: ConfirmTradeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Confirm a high-value trade using the email verification code.
+
+    This endpoint is called after the user receives an email with
+    a 6-digit confirmation code for trades exceeding the threshold.
+    """
+    trade_data = verify_confirmation(
+        req.confirmation_token, req.confirmation_code, current_user.id
+    )
+    if not trade_data:
+        raise HTTPException(
+            status_code=400,
+            detail="Nieprawidłowy lub wygasły kod potwierdzenia. Spróbuj ponownie."
+        )
+
+    # Reconstruct the original TradeRequest from stored data
+    original_req = TradeRequest(**trade_data)
+    # Re-use the execute_trade logic but skip the email check
+    return await _execute_trade_internal(original_req, current_user, db, skip_email_check=True)

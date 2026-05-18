@@ -1,8 +1,11 @@
+"""Models for wallet management."""
+
 from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 class Wallet(Base):
+    """Wallet model representing user asset balances."""
     __tablename__ = "wallets"
 
     id = Column(Integer, primary_key=True, index=True)

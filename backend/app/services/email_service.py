@@ -54,7 +54,7 @@ async def send_confirmation_email(
     <html>
     <body style="font-family: Arial, sans-serif; background: #0f0f19; color: #e0e0e0; padding: 20px;">
         <div style="max-width: 500px; margin: 0 auto; background: #1a1a2e; border-radius: 12px; padding: 30px; border: 1px solid #2a2a4a;">
-            <h2 style="color: #00d4aa; margin-top: 0;">🔐 Potwierdzenie transakcji</h2>
+            <h2 style="color: #00d4aa; margin-top: 0;">Potwierdzenie transakcji</h2>
             <p>Witaj <strong>{username}</strong>,</p>
             <p>Otrzymaliśmy żądanie wykonania transakcji o wysokiej wartości:</p>
             <div style="background: #0f0f19; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 3px solid #00d4aa;">

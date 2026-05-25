@@ -517,7 +517,7 @@ function App() {
           justifyContent: 'center', alignItems: 'center', zIndex: 1000 
         }}>
           <div className="glass-panel animate-fade-in" style={{ width: '400px', textAlign: 'center' }}>
-            <h2 className="text-gradient" style={{ marginBottom: '16px' }}>📧 Potwierdzenie e-mail</h2>
+            <h2 className="text-gradient" style={{ marginBottom: '16px' }}>Potwierdzenie e-mail</h2>
             <p style={{ fontSize: '14px', marginBottom: '16px', color: 'var(--text-muted)' }}>
               {confirmMessage}
             </p>

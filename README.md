@@ -2,7 +2,7 @@
 
 Uniwersalna platforma inwestycyjna do zarządzania portfelem aktywów z automatycznymi zleceniami warunkowymi (Stop-Loss, Take-Profit).
 
-## 📋 Spis treści
+## Spis treści
 
 - [Wymagania](#wymagania)
 - [Technologie](#technologie)
@@ -14,14 +14,14 @@ Uniwersalna platforma inwestycyjna do zarządzania portfelem aktywów z automaty
 - [Struktura projektu](#struktura-projektu)
 - [Funkcjonalności](#funkcjonalności)
 
-## 🔧 Wymagania
+## Wymagania
 
 - Python 3.11+
 - Node.js 18+
 - PostgreSQL 15+
 - Docker (opcjonalnie)
 
-## 💻 Technologie
+## Technologie
 
 ### Backend
 - **Framework:** FastAPI
@@ -39,7 +39,7 @@ Uniwersalna platforma inwestycyjna do zarządzania portfelem aktywów z automaty
 - **Analiza kodu:** Pylint, Flake8
 - **Testy:** Pytest + Pytest-cov
 
-## 📦 Instalacja
+## Instalacja
 
 ### 1. Klonowanie repozytorium
 ```bash
@@ -78,7 +78,7 @@ docker run -d \
   postgres:15-alpine
 ```
 
-## ⚙️ Konfiguracja
+## Konfiguracja
 
 Utworz plik `.env` w katalogu `backend/`:
 
@@ -106,7 +106,7 @@ cd backend
 python make_admin.py username
 ```
 
-## 🚀 Uruchomienie
+## Uruchomienie
 
 ### Opcja 1: Lokalnie
 
@@ -132,7 +132,7 @@ docker-compose up -d --build
 - Backend API: http://localhost:8000
 - Dokumentacja API (Swagger): http://localhost:8000/docs
 
-## 🧪 Testy
+## Testy
 
 ### Backend
 ```bash
@@ -148,7 +148,7 @@ cd frontend
 npm test
 ```
 
-## 📚 Dokumentacja API
+## Dokumentacja API
 
 Pełna dokumentacja API jest dostępna automatycznie pod adresem:
 - **Swagger UI:** http://localhost:8000/docs
@@ -181,7 +181,7 @@ Pełna dokumentacja API jest dostępna automatycznie pod adresem:
 - `POST /api/admin/users/{id}/unblock` - Odblokowywanie
 - `GET /api/admin/stats` - Statystyki systemu
 
-## 📁 Struktura projektu
+## Struktura projektu
 
 ```
 Gielda/
@@ -205,39 +205,39 @@ Gielda/
 └── README.md
 ```
 
-## ✨ Funkcjonalności
+## Funkcjonalności
 
 ### Zaimplementowane:
 
-✅ **Bezpieczna autoryzacja i uwierzytelnianie**
+**Bezpieczna autoryzacja i uwierzytelnianie**
 - Rejestracja z weryfikacją siły hasła (zxcvbn)
 - 2FA (TOTP) z Google Authenticator
 - JWT tokens z CSRF protection
 - Blokada konta po 5 nieudanych próbach
 
-✅ **Zarządzanie portfelem**
+**Zarządzanie portfelem**
 - Wirtualny portfel inwestycyjny
 - Wpłaty środków
 - Podgląd balansu (dostępne/zablokowane)
 
-✅ **Zlecenia warunkowe**
+**Zlecenia warunkowe**
 - Stop-Loss (zabezpieczenie przed spadkami)
 - Take-Profit (realizacja zysku)
 - Automatyczna egzekucja
 - Blokowanie aktywów przy składaniu zlecenia
 
-✅ **Integracja z rynkiem**
+**Integracja z rynkiem**
 - Cykliczne pobieranie cen (co 5 sekund)
 - Integracja z Binance Demo API
 - Obsługa błędów (timeout, brak połączenia)
 
-✅ **Panel administratora**
+**Panel administratora**
 - Zarządzanie użytkownikami (blokowanie/odblokowywanie)
 - Resetowanie haseł
 - Monitorowanie transakcji
 - Statystyki systemu
 
-✅ **Wymagania niefunkcjonalne**
+**Wymagania niefunkcjonalne**
 - Docker + konteneryzacja
 - Transakcje bazodanowe (rollback na błędy)
 - Python + React + PostgreSQL
@@ -245,7 +245,35 @@ Gielda/
 - Statyczna analiza kodu (Pylint, Flake8)
 - Testy jednostkowe (min. 75% pokrycia)
 
-## 🔒 Bezpieczeństwo
+## Proces realizacji zleceń warunkowych (Stop-Loss / Take-Profit)
+
+Silnik zleceń (`app/services/order_engine.py`) działa w tle jako asynchroniczna pętla monitorująca rynki, realizując transakcje automatycznie w bezpiecznym 5-etapowym potoku (Operational Pipeline):
+
+1. **Fetch (Pobieranie cen i zleceń)**
+   - Cykliczne pobieranie aktualnych kursów aktywów (co 5 sekund przez API Binance lub wewnętrzny serwis symulacyjny).
+   - Pobranie listy wszystkich aktywnych zleceń warunkowych (`ACTIVE`) z bazy danych w celu weryfikacji.
+
+2. **Validate (Weryfikacja i Walidacja)**
+   - Sprawdzenie poprawności zablokowanego balansu w portfelu użytkownika (`locked_balance`).
+   - Obliczenie symulowanej prowizji transakcyjnej (0.5%). Jeśli koszty transakcji przewyższają szacowaną wartość sprzedaży, zlecenie jest natychmiast przerywane i oznaczane jako `FAILED`, aby uchronić użytkownika przed stratą kapitału.
+
+3. **Check Conditions (Weryfikacja warunków aktywacji)**
+   - Porównanie aktualnej ceny rynkowej z zadeklarowaną ceną aktywacji (`target_price`) na podstawie typu zlecenia i kierunku:
+     - **Stop-Loss (Sprzedaż):** aktywacja gdy cena rynkowa $\le$ `target_price`.
+     - **Take-Profit (Sprzedaż):** aktywacja gdy cena rynkowa $\ge$ `target_price`.
+     - **Stop-Loss (Kupno):** aktywacja gdy cena rynkowa $\ge$ `target_price`.
+     - **Take-Profit (Kupno):** aktywacja gdy cena rynkowa $\le$ `target_price`.
+
+4. **Transactional Settlement (Rozliczenie transakcyjne z Rollback)**
+   - Realizacja zlecenia na giełdzie Binance (przy skonfigurowanych kluczach API) lub wykonanie precyzyjnej symulacji lokalnej.
+   - Aktualizacja portfeli w izolowanej transakcji bazodanowej: odblokowanie i pobranie aktywów z `locked_balance` użytkownika oraz uznanie odpowiedniego konta docelowego.
+   - **Sprzątanie OCO (One-Cancels-the-Other):** Jeśli zlecenie należy do powiązanej grupy (np. jednoczesne wystawienie TP i SL), udane wykonanie jednego zlecenia automatycznie anuluje drugie (`CANCELLED`).
+   - W przypadku jakiegokolwiek nieoczekiwanego błędu, system wykonuje bezpieczny `db.rollback()`, przywraca zablokowane środki na saldo główne użytkownika, a status zlecenia aktualizuje na `FAILED` w oddzielnej bezpiecznej sesji.
+
+5. **Audit Log Creation (Utworzenie wpisu audytowego)**
+   - Trwałe zapisanie pełnego dziennika operacji w tabeli `TransactionHistory` zawierającego: typ transakcji, wykonaną ilość, cenę rynkową, pobraną prowizję oraz status wykonania wraz ze szczegółowym komunikatem diagnostycznym.
+
+## Bezpieczeństwo
 
 - Hasła hashowane (Argon2)
 - 2FA (TOTP) obowiązkowe
@@ -255,7 +283,7 @@ Gielda/
 - Weryfikacja wieku (min. 18 lat)
 - Blokada konta po próbach brut-force
 
-## 📊 Testy i Jakość
+## Testy i Jakość
 
 ### Backend
 - **Framework:** Pytest
@@ -267,14 +295,14 @@ Gielda/
 - **Flake8** (.flake8)
 - **Max line length:** 120 znaków
 
-## 📝 Licencja
+## Licencja
 
 Projekt edukacyjny - wszystkie prawa zastrzeżone.
 
-## 👥 Autorzy
+## Autorzy
 
 - [Twoje imię/nazwisko]
 
-## 📧 Kontakt
+## Kontakt
 
 [Twój e-mail]

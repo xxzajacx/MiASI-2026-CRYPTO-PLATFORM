@@ -1,5 +1,6 @@
 import sys
 import os
+os.environ["TESTING"] = "true"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
@@ -8,7 +9,7 @@ from datetime import date
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from app.main import app
+from app.main import app as fastapi_app
 from app.core.database import Base, get_db, AsyncSessionLocal
 from app.core.security import get_password_hash, create_access_token, generate_totp_secret
 from app.models.user import User
@@ -20,29 +21,32 @@ engine_test = create_async_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
 TestingSessionLocal = sessionmaker(
-    autocommit=False, autoflush=False, bind=engine_test, class_=AsyncSession
+    autocommit=False, autoflush=False, bind=engine_test, class_=AsyncSession, expire_on_commit=False
 )
 
-# Create tables once at the start
-@pytest_asyncio.fixture(scope="session", autouse=True)
+# Create tables for every test to ensure database isolation
+@pytest_asyncio.fixture(autouse=True)
 async def create_test_db():
     async with engine_test.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
     async with engine_test.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-    if os.path.exists("./test.db"):
-        os.remove("./test.db")
+    try:
+        if os.path.exists("./test.db"):
+            os.remove("./test.db")
+    except Exception:
+        pass
 
 async def override_get_db():
     async with TestingSessionLocal() as session:
         yield session
 
-app.dependency_overrides[get_db] = override_get_db
+fastapi_app.dependency_overrides[get_db] = override_get_db
 
 # Override AsyncSessionLocal in app.core.database so order_engine uses it
-import app.core.database
-app.core.database.AsyncSessionLocal = TestingSessionLocal
+import app.core.database as app_core_db
+app_core_db.AsyncSessionLocal = TestingSessionLocal
 
 @pytest_asyncio.fixture
 async def db_session():
@@ -51,7 +55,7 @@ async def db_session():
 
 @pytest_asyncio.fixture
 async def client() -> AsyncClient:
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(app=fastapi_app, base_url="http://test") as ac:
         yield ac
 
 @pytest_asyncio.fixture
@@ -62,7 +66,7 @@ async def create_user(db_session):
         hashed_password=get_password_hash("TestPass123!"),
         first_name="Test",
         last_name="User",
-        birth_date="2000-01-01",
+        birth_date=date(2000, 1, 1),
         totp_secret=generate_totp_secret()
     )
     db_session.add(user)
@@ -85,7 +89,7 @@ async def portfolio_user(db_session):
         hashed_password=get_password_hash("TestPass123!"),
         first_name="Portfolio",
         last_name="User",
-        birth_date="2000-01-01",
+        birth_date=date(2000, 1, 1),
         totp_secret=generate_totp_secret()
     )
     db_session.add(user)
@@ -112,7 +116,7 @@ async def trading_user(db_session):
         hashed_password=get_password_hash("TestPass123!"),
         first_name="Trader",
         last_name="User",
-        birth_date="2000-01-01",
+        birth_date=date(2000, 1, 1),
         totp_secret=generate_totp_secret()
     )
     db_session.add(user)
@@ -141,7 +145,7 @@ async def tx_user(db_session):
         hashed_password=get_password_hash("TestPass123!"),
         first_name="Tx",
         last_name="User",
-        birth_date="2000-01-01",
+        birth_date=date(2000, 1, 1),
         totp_secret=generate_totp_secret()
     )
     db_session.add(user)

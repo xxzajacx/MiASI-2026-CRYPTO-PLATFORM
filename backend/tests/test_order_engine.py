@@ -15,7 +15,7 @@ engine_module.AsyncSessionLocal = TestingSessionLocal
 @pytest.mark.asyncio
 async def test_stop_loss_execution_success(db_session):
     """Test Stop-Loss order execution when price drops below target."""
-    user = User(username="testuser", hashed_password="hashed_pw", first_name="Test", last_name="User", birth_date="2000-01-01")
+    user = User(username="testuser", hashed_password="hashed_pw", first_name="Test", last_name="User", birth_date=date(2000, 1, 1))
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
@@ -49,7 +49,7 @@ async def test_stop_loss_execution_success(db_session):
 @pytest.mark.asyncio
 async def test_take_profit_execution_success(db_session):
     """Test Take-Profit order execution when price rises above target."""
-    user = User(username="tp_user", hashed_password="123", first_name="TP", last_name="User", birth_date="2000-01-01")
+    user = User(username="tp_user", hashed_password="123", first_name="TP", last_name="User", birth_date=date(2000, 1, 1))
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
@@ -70,13 +70,14 @@ async def test_take_profit_execution_success(db_session):
 
     res_wallet = await db_session.execute(select(Wallet).filter(Wallet.user_id == user.id, Wallet.asset_symbol == "BTC"))
     wallet_crypto = res_wallet.scalars().first()
+    await db_session.refresh(wallet_crypto)
     # Pieniądze powinny zostać ściągnięte z locked_balance
     assert wallet_crypto.locked_balance == 0.0
 
 @pytest.mark.asyncio
 async def test_order_ignored_when_conditions_not_met(db_session):
     """Test that order is not executed when price conditions are not met."""
-    user = User(username="user3", hashed_password="pwd", first_name="User", last_name="Three", birth_date="2000-01-01")
+    user = User(username="user3", hashed_password="pwd", first_name="User", last_name="Three", birth_date=date(2000, 1, 1))
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
@@ -95,7 +96,7 @@ async def test_order_ignored_when_conditions_not_met(db_session):
 @pytest.mark.asyncio
 async def test_order_fails_on_insufficient_wallet(db_session):
     """Test order fails when wallet has insufficient locked balance."""
-    user = User(username="user4", hashed_password="pwd", first_name="User", last_name="Four", birth_date="2000-01-01")
+    user = User(username="user4", hashed_password="pwd", first_name="User", last_name="Four", birth_date=date(2000, 1, 1))
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)

@@ -8,7 +8,7 @@ const Header = ({ systemStatus, handleLogout, setShowUserPanel, isAdmin, setShow
         <div style={{ textAlign: 'right', marginRight: '16px' }}>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Status Systemu</div>
           <div style={{ fontSize: '14px', color: systemStatus?.binance_connected ? 'var(--success)' : 'var(--accent)' }}>
-            {systemStatus?.binance_connected ? '🟢 LIVE' : '🔵 SYMULACJA'}
+            {systemStatus?.binance_connected ? 'LIVE' : 'SYMULACJA'}
           </div>
         </div>
         

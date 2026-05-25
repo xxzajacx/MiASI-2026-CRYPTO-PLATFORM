@@ -1,5 +1,6 @@
 """Tests for transaction history endpoints."""
 import pytest
+from datetime import date
 from httpx import AsyncClient
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +19,7 @@ async def tx_user(db_session: AsyncSession):
         hashed_password=get_password_hash("TestPass123!"),
         first_name="Tx",
         last_name="User",
-        birth_date="2000-01-01"
+        birth_date=date(2000, 1, 1)
     )
     db_session.add(user)
     await db_session.commit()

@@ -30,3 +30,7 @@ output-format = "colorized"
 [tool.pylint.TYPECHECK]
 # List of members which are set dynamically
 generated-members = ["requests.*", "sqlalchemy.*", "pydantic.*"]
+
+[tool.coverage.run]
+concurrency = ["greenlet"]
+

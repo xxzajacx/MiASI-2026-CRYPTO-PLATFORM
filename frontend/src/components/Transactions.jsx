@@ -1,4 +1,30 @@
 const Transactions = ({ history }) => {
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'COMPLETED':
+        return 'Wykonane';
+      case 'FAILED':
+        return 'Przerwane/Błąd';
+      case 'PENDING':
+        return 'Oczekujące';
+      default:
+        return status;
+    }
+  };
+
+  const getTypeLabel = (type) => {
+    switch (type) {
+      case 'BUY':
+        return 'Kupno';
+      case 'SELL':
+        return 'Sprzedaż';
+      case 'DEPOSIT':
+        return 'Wpłata';
+      default:
+        return type;
+    }
+  };
+
   return (
     <div className="glass-panel" style={{ gridColumn: 'span 3' }}>
       <h3 style={{ marginBottom: '16px', color: 'var(--text-muted)' }}>Historia Operacji</h3>
@@ -25,14 +51,14 @@ const Transactions = ({ history }) => {
                   fontWeight: 600, 
                   color: h.type === 'BUY' || h.type === 'DEPOSIT' ? 'var(--success)' : 'var(--danger)' 
                 }}>
-                  {h.type}
+                  {getTypeLabel(h.type)}
                 </td>
                 <td>{h.asset}</td>
                 <td>{h.amount}</td>
                 <td>{h.price ? `$${h.price.toFixed(2)}` : '-'}</td>
                 <td>
                   <span className={h.status === 'COMPLETED' ? "text-success" : "text-danger"}>
-                    {h.status}
+                    {getStatusLabel(h.status)}
                   </span>
                 </td>
                 <td className="text-muted" style={{ fontSize: '12px' }}>{h.log_message}</td>

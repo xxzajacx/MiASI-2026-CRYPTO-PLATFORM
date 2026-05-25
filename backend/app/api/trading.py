@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import AsyncSessionLocal
+from app.core.database import get_db, AsyncSessionLocal
 from app.core.config import settings
 from app.api.auth import get_current_user
 from app.models.user import User
@@ -29,7 +29,8 @@ class OrderExecutionResponse(BaseModel):
 @router.post("/buy", response_model=OrderExecutionResponse)
 async def market_buy(
     order_req: MarketOrderRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """Execute a market buy order on Binance Demo."""
     # Validate symbol
@@ -47,20 +48,19 @@ async def market_buy(
         raise HTTPException(status_code=503, detail=f"Failed to execute order on Binance: {str(e)}")
 
     # Log transaction to local DB
-    async with AsyncSessionLocal() as db:
-        transaction = TransactionHistory(
-            user_id=current_user.id,
-            order_id=None,
-            type="BUY",
-            amount=binance_order["executed_qty"],
-            asset=order_req.symbol,
-            price=binance_order["cummulative_quote_qty"] / binance_order["executed_qty"] if binance_order["executed_qty"] > 0 else 0,
-            fee=sum(float(fill.get("commission", 0)) for fill in binance_order["fills"]),
-            status="COMPLETED",
-            log_message=f"Binance market buy order {binance_order['order_id']}"
-        )
-        db.add(transaction)
-        await db.commit()
+    transaction = TransactionHistory(
+        user_id=current_user.id,
+        order_id=None,
+        type="BUY",
+        amount=binance_order["executed_qty"],
+        asset=order_req.symbol,
+        price=binance_order["cummulative_quote_qty"] / binance_order["executed_qty"] if binance_order["executed_qty"] > 0 else 0,
+        fee=sum(float(fill.get("commission", 0)) for fill in binance_order["fills"]),
+        status="COMPLETED",
+        log_message=f"Binance market buy order {binance_order['order_id']}"
+    )
+    db.add(transaction)
+    await db.commit()
 
     return OrderExecutionResponse(
         success=True,
@@ -74,7 +74,8 @@ async def market_buy(
 @router.post("/market-sell", response_model=OrderExecutionResponse)
 async def market_sell(
     order_req: MarketOrderRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """Execute a market sell order on Binance Demo."""
     tracked_symbols = [s.strip() for s in settings.TRACKED_SYMBOLS.split(",")]
@@ -98,20 +99,19 @@ async def market_sell(
     total_fee = sum(float(fill.get("commission", 0)) for fill in fills)
 
     # Log transaction
-    async with AsyncSessionLocal() as db:
-        transaction = TransactionHistory(
-            user_id=current_user.id,
-            order_id=None,
-            type="SELL",
-            amount=total_qty,
-            asset=order_req.symbol,
-            price=executed_price,
-            fee=total_fee,
-            status="COMPLETED",
-            log_message=f"Binance market sell order {binance_order.get('orderId')}"
-        )
-        db.add(transaction)
-        await db.commit()
+    transaction = TransactionHistory(
+        user_id=current_user.id,
+        order_id=None,
+        type="SELL",
+        amount=total_qty,
+        asset=order_req.symbol,
+        price=executed_price,
+        fee=total_fee,
+        status="COMPLETED",
+        log_message=f"Binance market sell order {binance_order.get('orderId')}"
+    )
+    db.add(transaction)
+    await db.commit()
 
     return OrderExecutionResponse(
         success=True,

@@ -223,9 +223,9 @@ async def test_cancel_other_user_order_fails(client: AsyncClient, db_session: As
     
     # Create two users
     user1 = User(username="user1", hashed_password=get_password_hash("TestPass123!"),
-                   first_name="User", last_name="One", birth_date="2000-01-01")
+                   first_name="User", last_name="One", birth_date=date(2000, 1, 1))
     user2 = User(username="user2", hashed_password=get_password_hash("TestPass123!"),
-                   first_name="User", last_name="Two", birth_date="2000-01-01")
+                   first_name="User", last_name="Two", birth_date=date(2000, 1, 1))
     db_session.add_all([user1, user2])
     await db_session.commit()
     

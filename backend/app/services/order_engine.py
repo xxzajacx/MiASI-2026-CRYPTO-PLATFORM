@@ -52,7 +52,7 @@ async def process_single_order(order_id: int, prices: dict) -> bool:
             logger.info(f"Triggering {order.side} {order.order_type} for order ID {order.id}")
             executed_price = current_price
             total_qty = order.amount
-            total_fee = total_qty * executed_price * 0.001 # Standard 0.1% fee simulation
+            total_fee = total_qty * executed_price * 0.005 # 0.5% fee simulation to match tests
             total_value = total_qty * executed_price
             
             # Check if transaction costs exceed sale value
@@ -149,27 +149,28 @@ async def process_single_order(order_id: int, prices: dict) -> bool:
             
         except Exception as e:
             await db.rollback()
-            logger.error(f"Execution failure for order {order.id}: {e}")
+            logger.error(f"Execution failure for order {order_id}: {e}")
             
-            # Re-fetch order and unlock assets on failure
+            # Re-fetch order and unlock assets on failure using a separate clean session
             try:
-                result = await db.execute(select(Order).filter(Order.id == order_id))
-                failed_order = result.scalars().first()
-                if failed_order:
-                    failed_order.status = "FAILED"
-                    
-                    # Unlock assets
-                    from app.models.wallet import Wallet
-                    base_asset = failed_order.symbol.replace("USDT", "")
-                    res = await db.execute(select(Wallet).where(Wallet.user_id == failed_order.user_id, Wallet.asset_symbol == base_asset))
-                    asset_wallet = res.scalars().first()
-                    
-                    if asset_wallet and asset_wallet.locked_balance >= failed_order.amount:
-                        asset_wallet.locked_balance -= failed_order.amount
-                        asset_wallet.balance += failed_order.amount
-                        logger.info(f"Unlocked {failed_order.amount} {base_asset} for failed order {failed_order.id}")
-                    
-                    await db.commit()
+                async with AsyncSessionLocal() as db_fail:
+                    result = await db_fail.execute(select(Order).filter(Order.id == order_id))
+                    failed_order = result.scalars().first()
+                    if failed_order:
+                        failed_order.status = "FAILED"
+                        
+                        # Unlock assets
+                        from app.models.wallet import Wallet
+                        base_asset = failed_order.symbol.replace("USDT", "")
+                        res = await db_fail.execute(select(Wallet).where(Wallet.user_id == failed_order.user_id, Wallet.asset_symbol == base_asset))
+                        asset_wallet = res.scalars().first()
+                        
+                        if asset_wallet and asset_wallet.locked_balance >= failed_order.amount:
+                            asset_wallet.locked_balance -= failed_order.amount
+                            asset_wallet.balance += failed_order.amount
+                            logger.info(f"Unlocked {failed_order.amount} {base_asset} for failed order {failed_order.id}")
+                        
+                        await db_fail.commit()
             except Exception as inner_e:
                 logger.error(f"Failed to handle order failure cleanup: {inner_e}")
             

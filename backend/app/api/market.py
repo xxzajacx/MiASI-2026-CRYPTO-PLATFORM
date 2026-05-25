@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, Depends, HTTPException
+from fastapi import APIRouter, Query, Depends, HTTPException, Header
 from pydantic import BaseModel
 from typing import Dict, Optional, List
 from app.services.market_data import market_data_service
@@ -56,16 +56,16 @@ class PriceResponse(BaseModel):
     price: Optional[float] = None
     error: Optional[str] = None
 
-@router.get("/prices", response_model=PricesResponse)
+@router.get("/prices", response_model=Dict[str, float])
 async def get_current_prices():
     prices = await market_data_service.get_all_prices()
-    return {"prices": prices}
+    return prices
 
 @router.get("/price/{symbol}", response_model=PriceResponse)
 async def get_price(symbol: str):
     price = market_data_service.get_price(symbol)
     if price is None:
-        return {"symbol": symbol, "price": None, "error": "Symbol not found or data not fetched yet"}
+        raise HTTPException(status_code=404, detail="Symbol not found")
     return {"symbol": symbol, "price": price, "error": None}
 
 @router.post("/trade", response_model=TradeResponse)
@@ -299,11 +299,33 @@ async def _execute_trade_internal(
         order_id=binance_order_id,
     )
 
+async def get_optional_user(
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db)
+) -> Optional[User]:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.split(" ")[1]
+    import jwt
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username = payload.get("sub")
+        if not username or payload.get("type") == "temp":
+            return None
+        result = await db.execute(select(User).filter(User.username == username))
+        return result.scalars().first()
+    except Exception:
+        return None
+
 @router.get("/status")
-async def get_market_status(current_user: User = Depends(get_current_user)):
-    user_api_key = current_user.binance_api_key or market_data_service.api_key
-    user_secret_key = current_user.binance_secret_key or market_data_service.api_secret
+async def get_market_status(current_user: Optional[User] = Depends(get_optional_user)):
+    user_api_key = current_user.binance_api_key if current_user else None
+    user_secret_key = current_user.binance_secret_key if current_user else None
     
+    if not user_api_key:
+        user_api_key = market_data_service.api_key
+        user_secret_key = market_data_service.api_secret
+        
     is_live = bool(
         user_api_key and 
         user_secret_key and 
@@ -315,6 +337,11 @@ async def get_market_status(current_user: User = Depends(get_current_user)):
         "symbols": [s.strip() for s in settings.TRACKED_SYMBOLS.split(",")],
         "min_order_sizes": market_data_service.MIN_ORDER_SIZES
     }
+
+@router.post("/refresh")
+async def refresh_prices():
+    await market_data_service.refresh()
+    return {"status": "success"}
 
 
 @router.post("/trade/confirm", response_model=TradeResponse)

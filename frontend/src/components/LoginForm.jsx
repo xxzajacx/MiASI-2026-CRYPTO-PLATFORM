@@ -29,10 +29,11 @@ const LoginForm = ({ username, setUsername, password, handlePasswordChange, erro
           onClick={() => setShowPassword(!showPassword)}
           style={{
             position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
-            background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer'
+            background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+            fontSize: '12px'
           }}
         >
-          {showPassword ? "👁️" : "👁️‍🗨️"}
+          {showPassword ? "Ukryj" : "Pokaż"}
         </button>
       </div>
 

@@ -36,7 +36,7 @@ const UserPanelModal = ({ showUserPanel, setShowUserPanel, hasBinanceKeys, setHa
         </div>
 
         <div style={{ marginBottom: '24px' }}>
-          <h3 style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>👤 Informacje o koncie</h3>
+          <h3 style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>Informacje o koncie</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Nazwa użytkownika</div>

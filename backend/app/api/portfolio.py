@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
 from app.api.auth import get_current_user
 from app.models.user import User
@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 class DepositRequest(BaseModel):
-    amount: float
-    asset: str = "USDT"
+    amount: float = Field(..., gt=0)
+    asset: Optional[str] = None
+    asset_symbol: Optional[str] = None
 
 class WalletResponse(BaseModel):
     asset_symbol: str
@@ -34,7 +35,7 @@ class PortfolioResponse(BaseModel):
 class MessageResponse(BaseModel):
     message: str
 
-@router.get("/", response_model=PortfolioResponse)
+@router.get("/", response_model=List[WalletResponse])
 async def get_portfolio(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -68,7 +69,7 @@ async def get_portfolio(
                 locked_balance=data["locked"]
             ))
         
-        return {"items": wallet_list}
+        return wallet_list
         
     except Exception as e:
         logger.warning(f"Failed to fetch Binance balance, using local fallback: {e}")
@@ -85,7 +86,7 @@ async def get_portfolio(
             locked_balance=w.locked_balance
         ) for w in wallets]
 
-        return {"items": items}
+        return items
 
 @router.post("/deposit", response_model=MessageResponse)
 async def deposit_funds(
@@ -94,17 +95,16 @@ async def deposit_funds(
     db: AsyncSession = Depends(get_db)
 ):
     """Simulate depositing funds into local wallet."""
-    if req.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
+    asset = req.asset_symbol or req.asset or "USDT"
     
     # Get or create wallet for the asset
     result = await db.execute(
-        select(Wallet).where(Wallet.user_id == current_user.id, Wallet.asset_symbol == req.asset)
+        select(Wallet).where(Wallet.user_id == current_user.id, Wallet.asset_symbol == asset)
     )
     wallet = result.scalars().first()
     
     if not wallet:
-        wallet = Wallet(user_id=current_user.id, asset_symbol=req.asset, balance=0.0, locked_balance=0.0)
+        wallet = Wallet(user_id=current_user.id, asset_symbol=asset, balance=0.0, locked_balance=0.0)
         db.add(wallet)
     
     wallet.balance += req.amount
@@ -114,12 +114,12 @@ async def deposit_funds(
         user_id=current_user.id,
         type="DEPOSIT",
         amount=req.amount,
-        asset=req.asset,
+        asset=asset,
         status="COMPLETED",
-        log_message=f"Manual deposit of {req.amount} {req.asset}"
+        log_message=f"Manual deposit of {req.amount} {asset}"
     )
     db.add(transaction)
     
     await db.commit()
     
-    return {"message": f"Successfully deposited {req.amount} {req.asset}"}
+    return {"message": f"Successfully deposited {req.amount} {asset}"}

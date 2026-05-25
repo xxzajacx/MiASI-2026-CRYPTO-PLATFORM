@@ -107,6 +107,24 @@ const AdminPanel = ({ token }) => {
     }
   };
 
+  const resetPassword = async (userId) => {
+    const newPassword = window.prompt('Wpisz nowe hasło dla użytkownika:');
+    if (!newPassword) return;
+    if (newPassword.length < 12) {
+      alert('Hasło musi mieć co najmniej 12 znaków!');
+      return;
+    }
+    try {
+      await axios.post(`${API_URL}/admin/users/${userId}/reset-password`, 
+        { new_password: newPassword }, 
+        { headers: getHeaders() }
+      );
+      alert('Hasło zostało pomyślnie zresetowane');
+    } catch (err) {
+      alert('Błąd resetowania hasła: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'users') fetchUsers();
     else if (activeTab === 'transactions') fetchTransactions();
@@ -218,6 +236,9 @@ const AdminPanel = ({ token }) => {
                           Odblokuj
                         </button>
                       )}
+                      <button onClick={() => resetPassword(user.id)} className="btn" style={{ padding: '6px 12px', fontSize: '12px', color: 'var(--primary)', borderColor: 'var(--primary-glow)', boxShadow: 'none' }}>
+                        Resetuj Hasło
+                      </button>
                       <button onClick={() => deleteUser(user.id)} className="btn btn-danger" style={{ padding: '6px 12px', fontSize: '12px', boxShadow: 'none' }}>
                         Usuń
                       </button>
@@ -274,7 +295,9 @@ const AdminPanel = ({ token }) => {
                 <tr key={tx.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
                   <td style={{ padding: '12px' }}>{tx.id}</td>
                   <td style={{ padding: '12px' }}>{tx.username}</td>
-                  <td style={{ padding: '12px', color: tx.type === 'BUY' || tx.type === 'DEPOSIT' ? 'var(--success)' : 'var(--danger)' }}>{tx.type}</td>
+                  <td style={{ padding: '12px', color: tx.type === 'BUY' || tx.type === 'DEPOSIT' ? 'var(--success)' : 'var(--danger)' }}>
+                    {tx.type === 'BUY' ? 'Kupno' : tx.type === 'SELL' ? 'Sprzedaż' : tx.type === 'DEPOSIT' ? 'Wpłata' : tx.type}
+                  </td>
                   <td style={{ padding: '12px' }}>{tx.amount}</td>
                   <td style={{ padding: '12px' }}>{tx.asset}</td>
                   <td style={{ padding: '12px' }}>{tx.price !== null ? tx.price : '-'}</td>
@@ -317,7 +340,9 @@ const AdminPanel = ({ token }) => {
                     width: '10px', height: '10px', borderRadius: '50%',
                     background: status === 'COMPLETED' ? 'var(--success)' : status === 'CANCELLED' ? 'var(--danger)' : 'var(--accent)'
                   }}></div>
-                  <span>{status}: <strong>{count}</strong></span>
+                  <span>
+                    {status === 'COMPLETED' ? 'Wykonane' : status === 'CANCELLED' ? 'Anulowane' : status === 'ACTIVE' ? 'Aktywne' : status === 'FAILED' ? 'Błąd/Przerwane' : status}: <strong>{count}</strong>
+                  </span>
                 </div>
               ))}
               {Object.keys(stats.orders_by_status || {}).length === 0 && (

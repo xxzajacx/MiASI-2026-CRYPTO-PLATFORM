@@ -32,10 +32,12 @@ const Orders = ({ orders, prices, handleCancelOrder }) => {
                     background: o.order_type === 'STOP_LOSS' ? 'var(--danger-glow)' : 'var(--success-glow)',
                     color: o.order_type === 'STOP_LOSS' ? 'var(--danger)' : 'var(--success)'
                   }}>
-                    {o.order_type.replace('_', ' ')}
+                    {o.order_type === 'STOP_LOSS' ? 'Stop Loss' : 'Take Profit'}
                   </span>
                 </td>
-                <td style={{ color: o.side === 'BUY' ? 'var(--success)' : 'var(--danger)' }}>{o.side}</td>
+                <td style={{ color: o.side === 'BUY' ? 'var(--success)' : 'var(--danger)' }}>
+                  {o.side === 'BUY' ? 'Kupno' : 'Sprzedaż'}
+                </td>
                 <td>{o.amount}</td>
                 <td style={{ fontWeight: 600 }}>${o.target_price}</td>
                 <td className={prices[o.symbol] > o.target_price ? 'text-success' : 'text-danger'}>

@@ -49,7 +49,7 @@ const SettingsPanel = ({ hasBinanceKeys, setHasBinanceKeys }) => {
   return (
     <div className="glass-panel">
       <h3 style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>
-        ⚙️ Ustawienia – Klucze Binance API
+        Ustawienia – Klucze Binance API
       </h3>
 
       <div style={{ 
@@ -61,14 +61,14 @@ const SettingsPanel = ({ hasBinanceKeys, setHasBinanceKeys }) => {
         color: 'var(--text-muted)'
       }}>
         <p style={{ margin: '0 0 8px 0' }}>
-          <strong style={{ color: 'var(--accent)' }}>ℹ️ Info:</strong> Podaj własne klucze API z
+          <strong style={{ color: 'var(--accent)' }}>Info:</strong> Podaj własne klucze API z
           {' '}<a href="https://demo.binance.com" target="_blank" rel="noopener" style={{ color: 'var(--accent)' }}>
             demo.binance.com
           </a>{' '}
           aby handlować na swoim koncie demo. Bez kluczy transakcje będą realizowane lokalnie (symulacja).
         </p>
         <p style={{ margin: 0, fontSize: '11px' }}>
-          🔒 Klucze są przechowywane bezpiecznie w bazie danych i używane wyłącznie do realizacji Twoich zleceń.
+          Klucze są przechowywane bezpiecznie w bazie danych i używane wyłącznie do realizacji Twoich zleceń.
         </p>
       </div>
 
@@ -79,7 +79,7 @@ const SettingsPanel = ({ hasBinanceKeys, setHasBinanceKeys }) => {
           color: hasBinanceKeys ? 'var(--success)' : 'var(--text-muted)',
           fontWeight: 600 
         }}>
-          {hasBinanceKeys ? '✅ Skonfigurowane' : '❌ Brak kluczy'}
+          {hasBinanceKeys ? 'Skonfigurowane' : 'Brak kluczy'}
         </span>
       </div>
 

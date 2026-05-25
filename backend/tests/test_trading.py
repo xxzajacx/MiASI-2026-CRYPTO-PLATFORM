@@ -1,5 +1,7 @@
 """Tests for trading endpoints."""
 import pytest
+from datetime import date
+from unittest.mock import patch
 from httpx import AsyncClient
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +20,7 @@ async def trading_user(db_session: AsyncSession):
         hashed_password=get_password_hash("TestPass123!"),
         first_name="Trade",
         last_name="User",
-        birth_date="2000-01-01"
+        birth_date=date(2000, 1, 1)
     )
     db_session.add(user)
     await db_session.commit()
@@ -33,7 +35,7 @@ async def test_market_buy_success(client: AsyncClient, db_session: AsyncSession,
     """Test market buy order."""
     headers, user_id = trading_user
     
-    with pytest.mock.patch('app.services.market_data.BinanceClient.execute_trade') as mock:
+    with patch('app.services.market_data.BinanceClient.execute_trade') as mock:
         mock.return_value = {
             "order_id": 12345,
             "symbol": "BTCUSDT",
@@ -58,7 +60,7 @@ async def test_market_sell_success(client: AsyncClient, db_session: AsyncSession
     """Test market sell order."""
     headers, user_id = trading_user
     
-    with pytest.mock.patch('app.services.market_data.BinanceClient.execute_trade') as mock:
+    with patch('app.services.market_data.BinanceClient.execute_trade') as mock:
         mock.return_value = {
             "orderId": 12346,
             "symbol": "BTCUSDT",

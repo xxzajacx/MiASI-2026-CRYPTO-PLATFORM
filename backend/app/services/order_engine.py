@@ -140,7 +140,7 @@ async def process_single_order(order_id: int, prices: dict) -> bool:
                 price=executed_price,
                 fee=total_fee,
                 status="COMPLETED",
-                log_message=f"Protective {order.order_type} executed (Binance: {binance_success})"
+                log_message=f"Wykonano zlecenie ochronne {order.order_type} (Binance: {binance_success})"
             )
             db.add(transaction)
             await db.commit()

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 
 const TradeModal = ({ 
   showTradeModal, setShowTradeModal, 
@@ -16,22 +16,21 @@ const TradeModal = ({
 
   const baseAsset = tradeSymbol.replace('USDT', '');
   
-  const handleMax = () => {
-    const assetWallet = wallet.find(w => w.asset_symbol === baseAsset);
-    const usdtWallet = wallet.find(w => w.asset_symbol === 'USDT');
-    
-    if (tradeAmountType === 'crypto') {
-      if (assetWallet) setTradeAmount(assetWallet.balance.toString());
-    } else {
-      if (usdtWallet && prices[tradeSymbol]) {
-        setTradeAmount((usdtWallet.balance / prices[tradeSymbol]).toString());
-      }
-    }
-  };
+  const assetWallet = wallet.find(w => w.asset_symbol === baseAsset);
+  const usdtWallet = wallet.find(w => w.asset_symbol === 'USDT');
+  const currentPrice = prices[tradeSymbol] || 0;
 
-  const available = tradeAmountType === 'crypto' 
-    ? (wallet.find(w => w.asset_symbol === baseAsset)?.balance || 0)
-    : (wallet.find(w => w.asset_symbol === 'USDT')?.balance || 0);
+  const spendAsset = tradeSide === 'BUY' ? 'USDT' : baseAsset;
+  const spendBalance = tradeSide === 'BUY' ? (usdtWallet?.balance || 0) : (assetWallet?.balance || 0);
+  const effectiveAmountType = tradeSide === 'BUY' ? 'usdt' : 'crypto';
+
+  useEffect(() => {
+    setTradeAmountType(effectiveAmountType);
+  }, [effectiveAmountType, setTradeAmountType]);
+
+  const handleMax = () => {
+    setTradeAmount(spendBalance.toString());
+  };
 
   return (
     <div style={{ 
@@ -96,31 +95,11 @@ const TradeModal = ({
             <div className="flex-between" style={{ marginBottom: '8px' }}>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <label style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                  Ilość ({tradeAmountType === 'crypto' ? baseAsset : 'USDT'})
+                  Ilość ({spendAsset})
                 </label>
-                <div style={{ display: 'flex', gap: '8px', background: 'var(--bg-card)', borderRadius: '4px', padding: '2px' }}>
-                  <button 
-                    type="button" 
-                    className={`btn ${tradeAmountType === 'crypto' ? 'btn-success' : ''}`} 
-                    style={{ padding: '2px 8px', fontSize: '10px' }} 
-                    onClick={() => setTradeAmountType('crypto')}
-                  >
-                    {baseAsset}
-                  </button>
-                  <button 
-                    type="button" 
-                    className={`btn ${tradeAmountType === 'usdt' ? 'btn-success' : ''}`} 
-                    style={{ padding: '2px 8px', fontSize: '10px' }} 
-                    onClick={() => setTradeAmountType('usdt')}
-                  >
-                    USDT
-                  </button>
-                </div>
               </div>
               <span style={{ fontSize: '12px', color: 'var(--accent)' }}>
-                Dostępne: {tradeAmountType === 'crypto' 
-                  ? available.toFixed(5) + ' ' + baseAsset 
-                  : available.toFixed(2) + ' USDT'}
+                Dostępne: {spendBalance.toFixed(spendAsset === 'USDT' ? 2 : 5)} {spendAsset}
               </span>
             </div>
             <div style={{ position: 'relative' }}>
@@ -128,7 +107,7 @@ const TradeModal = ({
                 type="number" 
                 step="any" 
                 className="input-field" 
-                placeholder={tradeAmountType === 'crypto' ? "0.00000" : "0.00"} 
+                placeholder={effectiveAmountType === 'crypto' ? "0.00000" : "0.00"} 
                 value={tradeAmount} 
                 onChange={e => setTradeAmount(e.target.value)} 
                 required 
@@ -220,15 +199,15 @@ const TradeModal = ({
                 <span style={{ fontSize: '11px', color: (() => {
                   const amt = parseFloat(tradeAmount || 0);
                   const price = prices[tradeSymbol] || 0;
-                  const notional = tradeAmountType === 'crypto' ? (amt * price) : amt;
+                  const notional = effectiveAmountType === 'crypto' ? (amt * price) : amt;
                   const minUsdtTotal = (minOrderSizes?.[tradeSymbol] || 0.001) * price;
                   return notional >= minUsdtTotal ? 'var(--success)' : 'var(--danger)';
                 })() }}>
                   {(() => {
                     const amt = parseFloat(tradeAmount || 0);
                     const price = prices[tradeSymbol] || 0;
-                    const notional = tradeAmountType === 'crypto' ? (amt * price) : amt;
-                    const cryptoEquiv = tradeAmountType === 'crypto' ? amt : (amt / price);
+                    const notional = effectiveAmountType === 'crypto' ? (amt * price) : amt;
+                    const cryptoEquiv = effectiveAmountType === 'crypto' ? amt : (amt / price);
                     return `${cryptoEquiv.toFixed(4)} ${baseAsset} (~$${notional.toFixed(2)})`;
                   })()}
                 </span>

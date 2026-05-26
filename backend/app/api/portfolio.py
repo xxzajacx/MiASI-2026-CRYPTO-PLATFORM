@@ -151,7 +151,7 @@ async def transfer_funds(
             amount=req.amount,
             asset=req.asset,
             status="COMPLETED",
-            log_message=f"Transfer {req.amount} {req.asset} from {req.from_type} to {req.to_type}"
+            log_message=f"Transfer {req.amount} {req.asset} z {req.from_type} do {req.to_type}"
         )
         db.add(transaction)
         await db.commit()
@@ -200,7 +200,7 @@ async def deposit_funds(
         amount=req.amount,
         asset=asset,
         status="COMPLETED",
-        log_message=f"Manual deposit of {req.amount} {asset}"
+        log_message=f"Ręczna wpłata {req.amount} {asset}"
     )
     db.add(transaction)
     

@@ -37,7 +37,7 @@ class BinanceClient:
     async def _signed_request(self, method: str, base_url: str, endpoint: str, params: dict = None) -> dict:
         """Execute a signed HTTP request to Binance."""
         if not self.api_key or "WKLEJ" in self.api_key:
-            raise ValueError("Binance API key not configured")
+            raise ValueError("Klucz API Binance nie jest skonfigurowany")
             
         params = params or {}
         params['timestamp'] = int(time.time() * 1000)
@@ -64,8 +64,27 @@ class BinanceClient:
                 response.raise_for_status()
                 return response.json()
             except httpx.HTTPStatusError as e:
-                logger.error(f"Binance API Error {e.response.status_code} on {endpoint}: {e.response.text}")
-                raise
+                error_body = e.response.text
+                logger.error(f"Binance API Error {e.response.status_code} on {endpoint}: {error_body}")
+                try:
+                    import json
+                    err_json = json.loads(error_body)
+                    msg = err_json.get("msg", error_body)
+                except Exception:
+                    msg = error_body
+                    
+                translations = {
+                    "Account has insufficient balance for requested action.": "Brak wystarczających środków na koncie do wykonania akcji.",
+                    "Filter failure: LOT_SIZE": "Nieprawidłowa wielkość zlecenia (LOT_SIZE).",
+                    "Filter failure: MIN_NOTIONAL": "Wartość zlecenia jest zbyt mała (MIN_NOTIONAL).",
+                    "Margin is insufficient": "Brak wystarczającego depozytu zabezpieczającego (Margin)."
+                }
+                
+                for en, pl in translations.items():
+                    if en in msg:
+                        msg = msg.replace(en, pl)
+                        
+                raise Exception(msg)
             except Exception as e:
                 logger.error(f"Network request failed: {e}")
                 raise
@@ -106,7 +125,7 @@ class BinanceClient:
         elif from_type == "FUTURES" and to_type == "SPOT":
             transfer_type = "UMFUTURE_MAIN"
         else:
-            raise ValueError(f"Unsupported transfer direction: {from_type} -> {to_type}")
+            raise ValueError(f"Nieobsługiwany kierunek transferu: {from_type} -> {to_type}")
             
         params = {
             "type": transfer_type,
@@ -118,23 +137,29 @@ class BinanceClient:
     MIN_ORDER_SIZES = {
         "BTCUSDT": 0.001,
         "ETHUSDT": 0.001,
-        "BNBUSDT": 0.01,
+        "BNBUSDT": 0.001,
     }
 
     async def execute_trade(self, symbol: str, side: str, amount: float, leverage: int = 1) -> dict:
         """Route trade execution based on leverage (1x Spot, >1x Futures)."""
+        import math
         # Adjust quantity precision based on asset rules
         if "BTC" in symbol:
-            amount = round(amount, 3 if leverage > 1 else 6)
+            decimals = 3 if leverage > 1 else 5
         elif "ETH" in symbol:
-            amount = round(amount, 3 if leverage > 1 else 5)
+            decimals = 3 if leverage > 1 else 4
+        elif "BNB" in symbol:
+            decimals = 2 if leverage > 1 else 3
         else:
-            amount = round(amount, 2 if leverage > 1 else 4)
+            decimals = 2 if leverage > 1 else 3
+            
+        factor = 10 ** decimals
+        amount = math.floor(amount * factor) / factor
 
         # Validate minimum order requirements
         min_size = self.MIN_ORDER_SIZES.get(symbol, 0.001)
         if amount < min_size:
-            raise ValueError(f"Quantity {amount} is below the required minimum of {min_size} {symbol.replace('USDT', '')}")
+            raise ValueError(f"Ilość {amount} jest poniżej wymaganego minimum {min_size} {symbol.replace('USDT', '')}")
 
         if leverage <= 1:
             # Execute Spot Market Order
@@ -193,7 +218,7 @@ class BinanceClient:
                 logger.warning(f"Price fetch failed from {url}: {e}")
                 continue
 
-        raise last_error or Exception("All price sources exhausted")
+        raise last_error or Exception("Wszystkie źródła cen wyczerpane")
 
     async def refresh(self):
         """Update local price cache."""

@@ -36,7 +36,7 @@ async def market_buy(
     # Validate symbol
     tracked_symbols = [s.strip() for s in settings.TRACKED_SYMBOLS.split(",")]
     if order_req.symbol not in tracked_symbols:
-        raise HTTPException(status_code=400, detail=f"Symbol {order_req.symbol} not supported")
+        raise HTTPException(status_code=400, detail=f"Symbol {order_req.symbol} nie jest obsługiwany")
     
     try:
         binance_order = await market_data_service.execute_market_buy(
@@ -45,7 +45,7 @@ async def market_buy(
         )
     except Exception as e:
         logger.error(f"Failed to execute buy order: {e}")
-        raise HTTPException(status_code=503, detail=f"Failed to execute order on Binance: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Nie udało się wykonać zlecenia na Binance: {str(e)}")
 
     # Log transaction to local DB
     transaction = TransactionHistory(
@@ -57,7 +57,7 @@ async def market_buy(
         price=binance_order["cummulative_quote_qty"] / binance_order["executed_qty"] if binance_order["executed_qty"] > 0 else 0,
         fee=sum(float(fill.get("commission", 0)) for fill in binance_order["fills"]),
         status="COMPLETED",
-        log_message=f"Binance market buy order {binance_order['order_id']}"
+        log_message=f"Zlecenie rynkowe kupna Binance {binance_order['order_id']}"
     )
     db.add(transaction)
     await db.commit()
@@ -68,7 +68,7 @@ async def market_buy(
         symbol=binance_order["symbol"],
         executed_qty=binance_order["executed_qty"],
         total_cost=binance_order["cummulative_quote_qty"],
-        message=f"Successfully bought {binance_order['executed_qty']} {order_req.symbol.replace('USDT', '')}"
+        message=f"Pomyślnie kupiono {binance_order['executed_qty']} {order_req.symbol.replace('USDT', '')}"
     )
 
 @router.post("/market-sell", response_model=OrderExecutionResponse)
@@ -80,7 +80,7 @@ async def market_sell(
     """Execute a market sell order on Binance Demo."""
     tracked_symbols = [s.strip() for s in settings.TRACKED_SYMBOLS.split(",")]
     if order_req.symbol not in tracked_symbols:
-        raise HTTPException(status_code=400, detail=f"Symbol {order_req.symbol} not supported")
+        raise HTTPException(status_code=400, detail=f"Symbol {order_req.symbol} nie jest obsługiwany")
     
     try:
         binance_order = await market_data_service.execute_market_sell(
@@ -89,7 +89,7 @@ async def market_sell(
         )
     except Exception as e:
         logger.error(f"Failed to execute sell order: {e}")
-        raise HTTPException(status_code=503, detail=f"Failed to execute order on Binance: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Nie udało się wykonać zlecenia na Binance: {str(e)}")
 
     # Process fills
     fills = binance_order.get("fills", [])
@@ -108,7 +108,7 @@ async def market_sell(
         price=executed_price,
         fee=total_fee,
         status="COMPLETED",
-        log_message=f"Binance market sell order {binance_order.get('orderId')}"
+        log_message=f"Zlecenie rynkowe sprzedaży Binance {binance_order.get('orderId')}"
     )
     db.add(transaction)
     await db.commit()
@@ -119,5 +119,5 @@ async def market_sell(
         symbol=binance_order.get("symbol"),
         executed_qty=total_qty,
         total_cost=total_value,
-        message=f"Successfully sold {total_qty} {order_req.symbol.replace('USDT', '')}"
+        message=f"Pomyślnie sprzedano {total_qty} {order_req.symbol.replace('USDT', '')}"
     )

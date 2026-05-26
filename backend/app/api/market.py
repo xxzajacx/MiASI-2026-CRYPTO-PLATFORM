@@ -65,7 +65,7 @@ async def get_current_prices():
 async def get_price(symbol: str):
     price = market_data_service.get_price(symbol)
     if price is None:
-        raise HTTPException(status_code=404, detail="Symbol not found")
+        raise HTTPException(status_code=404, detail="Nie znaleziono symbolu")
     return {"symbol": symbol, "price": price, "error": None}
 
 @router.post("/trade", response_model=TradeResponse)
@@ -98,7 +98,7 @@ async def _execute_trade_internal(
 
     req.side = req.side.upper()
     if req.side not in ["BUY", "SELL"]:
-        raise HTTPException(status_code=400, detail="Side must be BUY or SELL")
+        raise HTTPException(status_code=400, detail="Strona musi być BUY lub SELL")
     
     # Basic Validation
     if req.amount <= 0:
@@ -109,7 +109,7 @@ async def _execute_trade_internal(
         await market_data_service.refresh()
         current_price = market_data_service.get_price(req.symbol)
         if not current_price:
-            raise HTTPException(status_code=503, detail="Current price not available")
+            raise HTTPException(status_code=503, detail="Obecna cena jest niedostępna")
 
     # Minimum Notional Check (e.g. 5 USDT)
     notional_value = req.amount if req.amount_type == "usdt" else (req.amount * current_price)
@@ -207,7 +207,7 @@ async def _execute_trade_internal(
             if not usdt_wallet or usdt_wallet.balance < (required_margin + fee):
                 raise HTTPException(
                     status_code=400, 
-                    detail=f"Insufficient USDT balance for margin. Need {required_margin + fee:.2f}, have {usdt_wallet.balance if usdt_wallet else 0:.2f}"
+                    detail=f"Niewystarczające saldo USDT do zabezpieczenia depozytu. Potrzeba {required_margin + fee:.2f}, masz {usdt_wallet.balance if usdt_wallet else 0:.2f}"
                 )
             
             usdt_wallet.balance -= (required_margin + fee)
@@ -226,7 +226,7 @@ async def _execute_trade_internal(
             asset_wallet = res.scalars().first()
             
             if not asset_wallet or asset_wallet.balance < req.amount:
-                raise HTTPException(status_code=400, detail=f"Insufficient {base_asset} balance. Have: {asset_wallet.balance if asset_wallet else 0}")
+                raise HTTPException(status_code=400, detail=f"Niewystarczające saldo {base_asset}. Posiadasz: {asset_wallet.balance if asset_wallet else 0}")
             
             asset_wallet.balance -= req.amount
             
@@ -250,7 +250,7 @@ async def _execute_trade_internal(
         asset=base_asset,
         price=current_price,
         status="COMPLETED",
-        log_message=f"Market {req.side} of {req.amount} {base_asset} at {current_price} ({req.leverage}x leverage)"
+        log_message=f"Rynkowe {req.side} ilości {req.amount} {base_asset} po {current_price} (dźwignia {req.leverage}x)"
     )
     db.add(transaction)
 
@@ -259,14 +259,14 @@ async def _execute_trade_internal(
         # Validation
         if req.side == "BUY":
             if req.stop_loss and req.stop_loss >= current_price:
-                raise HTTPException(status_code=400, detail="Stop Loss for BUY must be lower than current price")
+                raise HTTPException(status_code=400, detail="Stop Loss dla BUY musi być niższy niż obecna cena")
             if req.take_profit and req.take_profit <= current_price:
-                raise HTTPException(status_code=400, detail="Take Profit for BUY must be higher than current price")
+                raise HTTPException(status_code=400, detail="Take Profit dla BUY musi być wyższy niż obecna cena")
         else: # SELL
             if req.stop_loss and req.stop_loss <= current_price:
-                raise HTTPException(status_code=400, detail="Stop Loss for SELL must be higher than current price")
+                raise HTTPException(status_code=400, detail="Stop Loss dla SELL musi być wyższy niż obecna cena")
             if req.take_profit and req.take_profit >= current_price:
-                raise HTTPException(status_code=400, detail="Take Profit for SELL must be lower than current price")
+                raise HTTPException(status_code=400, detail="Take Profit dla SELL musi być niższy niż obecna cena")
 
         if req.stop_loss or req.take_profit:
             group_id = str(uuid.uuid4())
@@ -301,7 +301,7 @@ async def _execute_trade_internal(
     
     return TradeResponse(
         success=True,
-        message=f"Successfully executed {req.side} order",
+        message=f"Pomyślnie wykonano zlecenie {req.side}",
         price=current_price,
         amount=req.amount,
         total_cost=req.amount * current_price,

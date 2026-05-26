@@ -295,8 +295,3 @@ Silnik zleceń (`app/services/order_engine.py`) działa w tle jako asynchroniczn
 - **Flake8** (.flake8)
 - **Max line length:** 120 znaków
 
-## Licencja
-
-Projekt edukacyjny - wszystkie prawa zastrzeżone.
-
-

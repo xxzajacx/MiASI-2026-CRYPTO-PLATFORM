@@ -299,10 +299,4 @@ Silnik zleceń (`app/services/order_engine.py`) działa w tle jako asynchroniczn
 
 Projekt edukacyjny - wszystkie prawa zastrzeżone.
 
-## Autorzy
 
-- [Twoje imię/nazwisko]
-
-## Kontakt
-
-[Twój e-mail]

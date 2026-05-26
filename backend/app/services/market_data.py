@@ -15,7 +15,7 @@ class BinanceClient:
     """Service for interacting with Binance Spot and Futures APIs."""
     def __init__(self):
         self.base_url = settings.BINANCE_BASE_URL.strip("/")
-        self.futures_url = "https://demo-fapi.binance.com"
+        self.futures_url = "https://testnet.binancefuture.com"
         
         # Sanitize API credentials
         self.api_key = settings.BINANCE_API_KEY.strip() if settings.BINANCE_API_KEY else ""
@@ -71,8 +71,8 @@ class BinanceClient:
                 raise
 
     async def get_account_balance(self) -> dict:
-        """Fetch and aggregate balances from both Spot and Futures accounts."""
-        combined = {}
+        """Fetch balances and return them separated by Spot and Futures."""
+        balances = {"SPOT": {}, "FUTURES": {}}
         
         # Fetch Spot Account Balance
         try:
@@ -82,7 +82,7 @@ class BinanceClient:
                 free = float(item["free"])
                 locked = float(item["locked"])
                 if free + locked > 0:
-                    combined[asset] = {"asset": asset, "free": free, "locked": locked, "total": free + locked, "type": "SPOT"}
+                    balances["SPOT"][asset] = {"asset": asset, "free": free, "locked": locked, "total": free + locked, "type": "SPOT"}
         except Exception as e:
             logger.warning(f"Spot balance fetch failed: {e}")
 
@@ -93,15 +93,27 @@ class BinanceClient:
                 asset = asset_data["asset"]
                 wallet_balance = float(asset_data["walletBalance"])
                 if wallet_balance != 0:
-                    if asset in combined:
-                        combined[asset]["total"] += wallet_balance
-                        combined[asset]["free"] += wallet_balance
-                    else:
-                        combined[asset] = {"asset": asset, "free": wallet_balance, "locked": 0.0, "total": wallet_balance, "type": "FUTURES"}
+                    balances["FUTURES"][asset] = {"asset": asset, "free": wallet_balance, "locked": 0.0, "total": wallet_balance, "type": "FUTURES"}
         except Exception as e:
             logger.warning(f"Futures balance fetch failed: {e}")
             
-        return combined
+        return balances
+
+    async def transfer_asset(self, asset: str, amount: float, from_type: str, to_type: str) -> dict:
+        """Transfer asset between SPOT and FUTURES using Binance Universal Transfer."""
+        if from_type == "SPOT" and to_type == "FUTURES":
+            transfer_type = "MAIN_UMFUTURE"
+        elif from_type == "FUTURES" and to_type == "SPOT":
+            transfer_type = "UMFUTURE_MAIN"
+        else:
+            raise ValueError(f"Unsupported transfer direction: {from_type} -> {to_type}")
+            
+        params = {
+            "type": transfer_type,
+            "asset": asset,
+            "amount": amount
+        }
+        return await self._signed_request("POST", self.base_url, "/sapi/v1/asset/transfer", params)
 
     MIN_ORDER_SIZES = {
         "BTCUSDT": 0.001,
@@ -155,14 +167,33 @@ class BinanceClient:
         """Execute a market SELL order on Binance Spot and return raw result."""
         return await self.execute_trade(symbol, "SELL", quantity, leverage=1)
 
+    FALLBACK_URL = "https://api.binance.com"
+
     async def fetch_all_prices(self) -> dict:
-        """Retrieve current ticker prices for tracked symbols."""
-        url = f"{self.base_url}/api/v3/ticker/price"
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, headers=self.headers)
-            resp.raise_for_status()
-            data = resp.json()
-            return {item["symbol"]: float(item["price"]) for item in data if not self.symbols or item["symbol"] in self.symbols}
+        """Retrieve current ticker prices for tracked symbols.
+        
+        Tries the configured base URL first (e.g. demo API), then falls back
+        to the public Binance API if that fails.
+        """
+        urls_to_try = [f"{self.base_url}/api/v3/ticker/price"]
+        # Add public Binance API as fallback if base URL differs
+        if "api.binance.com" not in self.base_url:
+            urls_to_try.append(f"{self.FALLBACK_URL}/api/v3/ticker/price")
+
+        last_error = None
+        for url in urls_to_try:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get(url)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    return {item["symbol"]: float(item["price"]) for item in data if not self.symbols or item["symbol"] in self.symbols}
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Price fetch failed from {url}: {e}")
+                continue
+
+        raise last_error or Exception("All price sources exhausted")
 
     async def refresh(self):
         """Update local price cache."""

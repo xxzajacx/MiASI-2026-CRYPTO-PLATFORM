@@ -1,4 +1,4 @@
-const MarketPrices = ({ prices, tradeSymbol, setTradeSymbol, setShowTradeModal }) => {
+const MarketPrices = ({ prices, tradeSymbol, setTradeSymbol, setShowTradeModal, isAdmin }) => {
   const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT'];
   
   return (
@@ -25,15 +25,17 @@ const MarketPrices = ({ prices, tradeSymbol, setTradeSymbol, setShowTradeModal }
           </div>
         ))}
       </div>
-      <div style={{ marginTop: '24px' }}>
-        <button 
-          className="btn btn-primary" 
-          style={{ width: '100%' }} 
-          onClick={() => setShowTradeModal(true)}
-        >
-          🛒 Otwórz Pozycję
-        </button>
-      </div>
+      {!isAdmin && (
+        <div style={{ marginTop: '24px' }}>
+          <button 
+            className="btn btn-primary" 
+            style={{ width: '100%' }} 
+            onClick={() => setShowTradeModal(true)}
+          >
+            🛒 Otwórz Pozycję
+          </button>
+        </div>
+      )}
     </div>
   );
 };

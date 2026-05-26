@@ -194,3 +194,66 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
   -moz-appearance: textfield; /* Firefox */
 }
+
+/* Comets Animation */
+.comets-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.comet {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8),
+              0 0 20px rgba(255, 255, 255, 0.8),
+              0 0 30px rgba(255, 255, 255, 0.8);
+  animation: cometFall linear infinite;
+  opacity: 0;
+}
+
+.comet::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 0;
+  width: 80px;
+  height: 1px;
+  background: linear-gradient(270deg, rgba(255, 255, 255, 0.8), transparent);
+}
+
+@keyframes cometFall {
+  0% {
+    transform: translate(120vw, -20vh) rotate(-45deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-20vw, 120vh) rotate(-45deg);
+    opacity: 0;
+  }
+}
+
+.comet-1 { top: 10%; left: 80%; animation-duration: 5s; animation-delay: 1s; }
+.comet-2 { top: -10%; left: 40%; animation-duration: 6s; animation-delay: 3s; }
+.comet-3 { top: 30%; left: 90%; animation-duration: 4s; animation-delay: 5s; }
+.comet-4 { top: 50%; left: 70%; animation-duration: 7s; animation-delay: 2s; }
+.comet-5 { top: -20%; left: 20%; animation-duration: 5s; animation-delay: 4s; }
+.comet-6 { top: 15%; left: 55%; animation-duration: 6.5s; animation-delay: 0.5s; }
+.comet-7 { top: -5%; left: 85%; animation-duration: 4.5s; animation-delay: 2.5s; }
+.comet-8 { top: 40%; left: 95%; animation-duration: 5.5s; animation-delay: 6s; }
+.comet-9 { top: -15%; left: 10%; animation-duration: 4.8s; animation-delay: 1.5s; }
+.comet-10 { top: 25%; left: 65%; animation-duration: 6.2s; animation-delay: 4.5s; }
+.comet-11 { top: 5%; left: 75%; animation-duration: 5.1s; animation-delay: 7s; }
+.comet-12 { top: -25%; left: 30%; animation-duration: 4.3s; animation-delay: 8s; }
+.comet-13 { top: 45%; left: 85%; animation-duration: 6.8s; animation-delay: 9s; }
+.comet-14 { top: -10%; left: 50%; animation-duration: 5.4s; animation-delay: 10s; }
+.comet-15 { top: 20%; left: 35%; animation-duration: 4.7s; animation-delay: 11s; }

@@ -50,7 +50,7 @@ class UserDetailResponse(UserResponse):
 
 class BlockUserRequest(BaseModel):
     reason: Optional[str] = None
-    lock_duration_minutes: int = 60
+    lock_duration_days: int = 1  # 0 = permanent ban
 
 
 class ResetPasswordRequest(BaseModel):
@@ -144,13 +144,19 @@ async def block_user(
         raise HTTPException(status_code=404, detail="User not found")
     
     user.is_active = False
-    lock_until = datetime.utcnow() + timedelta(minutes=block_req.lock_duration_minutes)
-    user.locked_until = lock_until.isoformat()
     
-    await db.commit()
-    logger.info(f"Admin {admin.username} blocked user {user.username} until {lock_until}")
-    
-    return {"message": f"User {user.username} blocked until {lock_until}"}
+    if block_req.lock_duration_days == 0:
+        # Permanent ban
+        user.locked_until = "PERMANENT"
+        await db.commit()
+        logger.info(f"Admin {admin.username} permanently banned user {user.username}")
+        return {"message": f"Użytkownik {user.username} został permanentnie zablokowany."}
+    else:
+        lock_until = datetime.utcnow() + timedelta(days=block_req.lock_duration_days)
+        user.locked_until = lock_until.isoformat()
+        await db.commit()
+        logger.info(f"Admin {admin.username} blocked user {user.username} for {block_req.lock_duration_days} days until {lock_until}")
+        return {"message": f"Użytkownik {user.username} zablokowany na {block_req.lock_duration_days} dni (do {lock_until.strftime('%Y-%m-%d %H:%M')})"}
 
 
 @router.post("/users/{user_id}/unblock")
@@ -350,7 +356,13 @@ async def get_system_stats(
     )
     orders_by_status = {status: count for status, count in orders_result.all()}
     
-    # Find live users
+    # Calculate wallet values split by SPOT and FUTURES
+    spot_wallet_value = 0.0
+    futures_wallet_value = 0.0
+    from app.services.market_data import BinanceClient, market_data_service
+    prices = await market_data_service.get_all_prices()
+    
+    # Find live users (with configured Binance keys)
     live_users_result = await db.execute(
         select(User).where(
             User.binance_api_key.is_not(None),
@@ -359,12 +371,11 @@ async def get_system_stats(
         )
     )
     live_users = live_users_result.scalars().all()
+    live_user_ids = {u.id for u in live_users}
     
-    total_wallet_value = 0.0
-    from app.services.market_data import BinanceClient, market_data_service
-    prices = await market_data_service.get_all_prices()
-    
+    # For LIVE users: try Binance API (already returns SPOT/FUTURES split)
     for l_user in live_users:
+        binance_ok = False
         try:
             client = BinanceClient()
             client.api_key = l_user.binance_api_key
@@ -372,26 +383,73 @@ async def get_system_stats(
             client.headers = {"X-MBX-APIKEY": l_user.binance_api_key}
             balances = await client.get_account_balance()
             
-            for asset, data in balances.items():
-                balance = data.get("total", 0.0)
-                if balance > 0:
-                    if asset == "USDT" or asset == "USDC":
-                        total_wallet_value += balance
-                    elif f"{asset}USDT" in prices:
-                        total_wallet_value += balance * prices[f"{asset}USDT"]
+            for wallet_type, assets in balances.items():
+                for asset, data in assets.items():
+                    balance = data.get("total", 0.0)
+                    if balance > 0:
+                        usd_value = 0.0
+                        if asset in ("USDT", "USDC"):
+                            usd_value = balance
+                        elif f"{asset}USDT" in prices:
+                            usd_value = balance * prices[f"{asset}USDT"]
+                        
+                        if wallet_type == "SPOT":
+                            spot_wallet_value += usd_value
+                        else:
+                            futures_wallet_value += usd_value
+            binance_ok = True
         except Exception as e:
             logger.warning(f"Failed to fetch Binance balance for stats (User {l_user.username}): {e}")
-            # Fallback to local DB for this user if Binance fails
-            wallets_result = await db.execute(
-                select(func.sum(Wallet.balance + Wallet.locked_balance))
-                .where(Wallet.user_id == l_user.id)
+        
+        # Fallback to local DB if Binance API failed
+        if not binance_ok:
+            user_wallets_result = await db.execute(
+                select(Wallet).where(Wallet.user_id == l_user.id)
             )
-            total_wallet_value += wallets_result.scalar_one() or 0
+            user_wallets = user_wallets_result.scalars().all()
+            for w in user_wallets:
+                total_balance = w.balance + w.locked_balance
+                if total_balance > 0:
+                    usd_value = 0.0
+                    if w.asset_symbol in ("USDT", "USDC"):
+                        usd_value = total_balance
+                    elif f"{w.asset_symbol}USDT" in prices:
+                        usd_value = total_balance * prices[f"{w.asset_symbol}USDT"]
+                    
+                    if w.wallet_type == "FUTURES":
+                        futures_wallet_value += usd_value
+                    else:
+                        spot_wallet_value += usd_value
+    
+    # For non-LIVE users: use local DB with wallet_type field
+    if live_user_ids:
+        sim_wallets_result = await db.execute(
+            select(Wallet).where(~Wallet.user_id.in_(live_user_ids))
+        )
+    else:
+        sim_wallets_result = await db.execute(select(Wallet))
+    sim_wallets = sim_wallets_result.scalars().all()
+    
+    for w in sim_wallets:
+        total_balance = w.balance + w.locked_balance
+        if total_balance > 0:
+            usd_value = 0.0
+            if w.asset_symbol in ("USDT", "USDC"):
+                usd_value = total_balance
+            elif f"{w.asset_symbol}USDT" in prices:
+                usd_value = total_balance * prices[f"{w.asset_symbol}USDT"]
+            
+            if w.wallet_type == "FUTURES":
+                futures_wallet_value += usd_value
+            else:
+                spot_wallet_value += usd_value
     
     return {
         "total_users": total_users,
         "active_users": active_users,
         "total_transactions": total_transactions,
         "orders_by_status": orders_by_status,
-        "total_wallet_value": total_wallet_value
+        "spot_wallet_value": spot_wallet_value,
+        "futures_wallet_value": futures_wallet_value,
+        "total_wallet_value": spot_wallet_value + futures_wallet_value
     }

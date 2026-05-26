@@ -88,7 +88,7 @@ async def test_block_user(client: AsyncClient, db_session: AsyncSession, admin_u
     
     response = await client.post(
         f"/api/admin/users/{regular_user}/block",
-        json={"lock_duration_minutes": 60},
+        json={"lock_duration_days": 1},
         headers=headers
     )
     assert response.status_code == 200
@@ -184,7 +184,7 @@ async def test_admin_cannot_block_self(client: AsyncClient, db_session: AsyncSes
     
     response = await client.post(
         f"/api/admin/users/{admin_id}/block",
-        json={"lock_duration_minutes": 60},
+        json={"lock_duration_days": 1},
         headers=headers
     )
     assert response.status_code == 400

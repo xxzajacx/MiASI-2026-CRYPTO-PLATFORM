@@ -70,13 +70,29 @@ const AdminPanel = ({ token }) => {
   };
 
   const blockUser = async (userId) => {
-    if (!window.confirm('Czy na pewno chcesz zablokować to konto?')) return;
+    const daysInput = window.prompt(
+      'Na ile dni zablokować konto?\n\n' +
+      '• Wpisz liczbę dni (np. 7 = tydzień)\n' +
+      '• Wpisz 0 = permanentny ban\n' +
+      '• Anuluj = rezygnacja',
+      '1'
+    );
+    if (daysInput === null) return; // user cancelled
+    const days = parseInt(daysInput, 10);
+    if (isNaN(days) || days < 0) {
+      alert('Nieprawidłowa wartość. Podaj liczbę >= 0.');
+      return;
+    }
+    const confirmMsg = days === 0 
+      ? 'Czy na pewno chcesz PERMANENTNIE zablokować to konto? Tej akcji nie da się cofnąć automatycznie.'
+      : `Czy na pewno chcesz zablokować to konto na ${days} dni?`;
+    if (!window.confirm(confirmMsg)) return;
     try {
-      await axios.post(`${API_URL}/admin/users/${userId}/block`, 
-        { lock_duration_minutes: 60 },
+      const res = await axios.post(`${API_URL}/admin/users/${userId}/block`, 
+        { lock_duration_days: days },
         { headers: getHeaders() }
       );
-      alert('Użytkownik został zablokowany');
+      alert(res.data.message || 'Użytkownik został zablokowany');
       fetchUsers();
     } catch (err) {
       alert('Błąd: ' + (err.response?.data?.detail || err.message));
@@ -327,8 +343,17 @@ const AdminPanel = ({ token }) => {
             <div style={{ fontSize: '28px', fontWeight: 'bold' }}>{stats.total_transactions}</div>
           </div>
           <div className="glass-panel" style={{ padding: '20px' }}>
-            <h4 style={{ color: 'var(--text-muted)', marginBottom: '8px', fontSize: '14px' }}>Wartość portfeli</h4>
+            <h4 style={{ color: 'var(--text-muted)', marginBottom: '8px', fontSize: '14px' }}>Łączna wartość portfeli</h4>
             <div style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--primary)' }}>{stats.total_wallet_value?.toFixed(2)} USDT</div>
+          </div>
+          
+          <div className="glass-panel" style={{ padding: '20px' }}>
+            <h4 style={{ color: 'var(--text-muted)', marginBottom: '8px', fontSize: '14px' }}>Portfele SPOT</h4>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--success)' }}>{stats.spot_wallet_value?.toFixed(2) || '0.00'} USDT</div>
+          </div>
+          <div className="glass-panel" style={{ padding: '20px' }}>
+            <h4 style={{ color: 'var(--text-muted)', marginBottom: '8px', fontSize: '14px' }}>Portfele FUTURES</h4>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--accent)' }}>{stats.futures_wallet_value?.toFixed(2) || '0.00'} USDT</div>
           </div>
           
           <div className="glass-panel" style={{ gridColumn: 'span 2', padding: '20px' }}>

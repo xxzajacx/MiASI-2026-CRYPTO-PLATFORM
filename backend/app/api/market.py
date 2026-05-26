@@ -89,6 +89,13 @@ async def _execute_trade_internal(
     skip_email_check: bool = False
 ):
     """Core trade execution logic shared by /trade and /trade/confirm."""
+    # Admin accounts cannot trade – they are management-only
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Konta administracyjne nie mają dostępu do funkcji inwestycyjnych."
+        )
+
     req.side = req.side.upper()
     if req.side not in ["BUY", "SELL"]:
         raise HTTPException(status_code=400, detail="Side must be BUY or SELL")
@@ -181,57 +188,59 @@ async def _execute_trade_internal(
                     status_code=400, 
                     detail="Brak środków na koncie Binance Futures. Zaloguj się na demo.binance.com i przelej USDT z portfela Spot do Futures."
                 )
-            logger.warning(f"Binance trade failed, falling back to local: {e}")
+            logger.warning(f"Binance trade failed: {e}")
+            raise HTTPException(status_code=400, detail=f"Błąd Binance: {e}")
 
-    # Local Wallet logic (always update local wallet as a shadow or fallback)
-    fee_rate = 0.001 # 0.1% fee
-    
-    if req.side == "BUY":
-        # Check USDT balance with leverage
-        res = await db.execute(select(Wallet).where(Wallet.user_id == current_user.id, Wallet.asset_symbol == quote_asset))
-        usdt_wallet = res.scalars().first()
+    # Local Wallet logic (only if not using Binance live)
+    if not binance_success:
+        fee_rate = 0.001 # 0.1% fee
         
-        total_value = req.amount * current_price
-        required_margin = total_value / req.leverage
-        fee = total_value * fee_rate
-        
-        if not usdt_wallet or usdt_wallet.balance < (required_margin + fee):
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Insufficient USDT balance for margin. Need {required_margin + fee:.2f}, have {usdt_wallet.balance if usdt_wallet else 0:.2f}"
-            )
-        
-        usdt_wallet.balance -= (required_margin + fee)
-        
-        # Add to base asset wallet
-        res = await db.execute(select(Wallet).where(Wallet.user_id == current_user.id, Wallet.asset_symbol == base_asset))
-        asset_wallet = res.scalars().first()
-        if not asset_wallet:
-            asset_wallet = Wallet(user_id=current_user.id, asset_symbol=base_asset, balance=0.0, locked_balance=0.0)
-            db.add(asset_wallet)
-        asset_wallet.balance += req.amount
-
-    else: # SELL
-        # Check base asset balance
-        res = await db.execute(select(Wallet).where(Wallet.user_id == current_user.id, Wallet.asset_symbol == base_asset))
-        asset_wallet = res.scalars().first()
-        
-        if not asset_wallet or asset_wallet.balance < req.amount:
-            raise HTTPException(status_code=400, detail=f"Insufficient {base_asset} balance. Have: {asset_wallet.balance if asset_wallet else 0}")
-        
-        asset_wallet.balance -= req.amount
-        
-        # Add to USDT wallet
-        res = await db.execute(select(Wallet).where(Wallet.user_id == current_user.id, Wallet.asset_symbol == quote_asset))
-        usdt_wallet = res.scalars().first()
-        if not usdt_wallet:
-            usdt_wallet = Wallet(user_id=current_user.id, asset_symbol=quote_asset, balance=0.0, locked_balance=0.0)
-            db.add(usdt_wallet)
+        if req.side == "BUY":
+            # Check USDT balance with leverage
+            res = await db.execute(select(Wallet).where(Wallet.user_id == current_user.id, Wallet.asset_symbol == quote_asset))
+            usdt_wallet = res.scalars().first()
             
-        total_value = req.amount * current_price
-        fee = total_value * fee_rate
-        
-        usdt_wallet.balance += (total_value - fee)
+            total_value = req.amount * current_price
+            required_margin = total_value / req.leverage
+            fee = total_value * fee_rate
+            
+            if not usdt_wallet or usdt_wallet.balance < (required_margin + fee):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Insufficient USDT balance for margin. Need {required_margin + fee:.2f}, have {usdt_wallet.balance if usdt_wallet else 0:.2f}"
+                )
+            
+            usdt_wallet.balance -= (required_margin + fee)
+            
+            # Add to base asset wallet
+            res = await db.execute(select(Wallet).where(Wallet.user_id == current_user.id, Wallet.asset_symbol == base_asset))
+            asset_wallet = res.scalars().first()
+            if not asset_wallet:
+                asset_wallet = Wallet(user_id=current_user.id, asset_symbol=base_asset, balance=0.0, locked_balance=0.0)
+                db.add(asset_wallet)
+            asset_wallet.balance += req.amount
+
+        else: # SELL
+            # Check base asset balance
+            res = await db.execute(select(Wallet).where(Wallet.user_id == current_user.id, Wallet.asset_symbol == base_asset))
+            asset_wallet = res.scalars().first()
+            
+            if not asset_wallet or asset_wallet.balance < req.amount:
+                raise HTTPException(status_code=400, detail=f"Insufficient {base_asset} balance. Have: {asset_wallet.balance if asset_wallet else 0}")
+            
+            asset_wallet.balance -= req.amount
+            
+            # Add to USDT wallet
+            res = await db.execute(select(Wallet).where(Wallet.user_id == current_user.id, Wallet.asset_symbol == quote_asset))
+            usdt_wallet = res.scalars().first()
+            if not usdt_wallet:
+                usdt_wallet = Wallet(user_id=current_user.id, asset_symbol=quote_asset, balance=0.0, locked_balance=0.0)
+                db.add(usdt_wallet)
+                
+            total_value = req.amount * current_price
+            fee = total_value * fee_rate
+            
+            usdt_wallet.balance += (total_value - fee)
 
     # Record transaction
     transaction = TransactionHistory(

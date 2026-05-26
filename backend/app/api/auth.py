@@ -94,6 +94,11 @@ class RegisterResponse(BaseModel):
     message: str
     username: str
 
+class ResetPasswordRequest(BaseModel):
+    username: str
+    totp_code: str
+    new_password: str
+
 async def check_pwned_password(password: str) -> bool:
     """Sprawdza czy hasło wyciekło w HaveIBeenPwned API."""
     import os
@@ -241,12 +246,26 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     
     # Check account lockout status
     if user.locked_until:
+        if user.locked_until == "PERMANENT":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Konto zostało permanentnie zablokowane. Skontaktuj się z administratorem."
+            )
         locked_time = datetime.fromisoformat(user.locked_until)
         if datetime.utcnow() < locked_time:
-            remaining_mins = int((locked_time - datetime.utcnow()).total_seconds() / 60)
+            remaining = locked_time - datetime.utcnow()
+            remaining_days = remaining.days
+            remaining_hours = remaining.seconds // 3600
+            if remaining_days > 0:
+                time_msg = f"{remaining_days} dni i {remaining_hours} godzin"
+            elif remaining_hours > 0:
+                time_msg = f"{remaining_hours} godzin"
+            else:
+                remaining_mins = remaining.seconds // 60
+                time_msg = f"{remaining_mins} minut"
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, 
-                detail=f"Konto zablokowane ze względów bezpieczeństwa. Spróbuj ponownie za {remaining_mins} minut."
+                detail=f"Konto zablokowane ze względów bezpieczeństwa. Spróbuj ponownie za {time_msg}."
             )
         else:
             # Reset lockout after timeout expiry
@@ -346,6 +365,33 @@ async def verify_2fa(
     set_csrf_cookie(json_response, csrf_token)
     
     return json_response
+
+@router.post("/reset-password")
+async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).filter(User.username == data.username))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if not verify_totp(user.totp_secret, data.totp_code):
+        raise HTTPException(status_code=400, detail="Invalid TOTP code")
+        
+    # Check password complexity
+    check_password_complexity(data.new_password)
+    
+    # Check HaveIBeenPwned
+    is_pwned = await check_pwned_password(data.new_password)
+    if is_pwned:
+        raise HTTPException(status_code=400, detail="To hasło wyciekło w znanych naruszeniach bezpieczeństwa. Wybierz inne.")
+        
+    user.hashed_password = get_password_hash(data.new_password)
+    
+    # Reset lockouts if any
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    
+    await db.commit()
+    return {"message": "Hasło zostało zmienione pomyślnie."}
 
 @router.get("/me")
 async def get_me(current_user: User = Depends(get_current_user)):

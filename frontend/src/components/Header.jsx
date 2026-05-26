@@ -7,7 +7,24 @@ const Header = ({ systemStatus, handleLogout, setShowUserPanel, isAdmin, setShow
       <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
         <div style={{ textAlign: 'right', marginRight: '16px' }}>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Status Systemu</div>
-          <div style={{ fontSize: '14px', color: systemStatus?.binance_connected ? 'var(--success)' : 'var(--accent)' }}>
+          <div style={{ 
+            fontSize: '14px', 
+            color: systemStatus?.binance_connected ? 'var(--success)' : 'var(--accent)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            justifyContent: 'flex-end'
+          }}>
+            {systemStatus?.binance_connected && (
+              <span style={{ 
+                display: 'inline-block',
+                width: '8px', 
+                height: '8px', 
+                borderRadius: '50%', 
+                backgroundColor: 'var(--success)',
+                boxShadow: '0 0 8px var(--success)'
+              }}></span>
+            )}
             {systemStatus?.binance_connected ? 'LIVE' : 'SYMULACJA'}
           </div>
         </div>

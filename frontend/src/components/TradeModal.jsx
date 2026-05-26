@@ -120,7 +120,7 @@ const TradeModal = ({
               <span style={{ fontSize: '12px', color: 'var(--accent)' }}>
                 Dostępne: {tradeAmountType === 'crypto' 
                   ? available.toFixed(5) + ' ' + baseAsset 
-                  : (available * (prices[tradeSymbol] || 0)).toFixed(2) + ' USDT'}
+                  : available.toFixed(2) + ' USDT'}
               </span>
             </div>
             <div style={{ position: 'relative' }}>
@@ -190,9 +190,9 @@ const TradeModal = ({
             </div>
           </div>
 
-          {/* Cost Estimation */}
+          {/* Cost Estimation & Limits */}
           <div style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', marginTop: '16px', fontSize: '13px' }}>
-            <div className="flex-between">
+            <div className="flex-between" style={{ marginBottom: '8px' }}>
               <span className="text-muted">Szacowany koszt (Margin):</span>
               <span style={{ fontWeight: 600 }}>
                 {(() => {
@@ -203,6 +203,37 @@ const TradeModal = ({
                 })()}
               </span>
             </div>
+            <div className="flex-between" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '8px' }}>
+              <span className="text-muted" style={{ fontSize: '11px' }}>Minimum Binance:</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                {(() => {
+                  const minCrypto = minOrderSizes?.[tradeSymbol] || 0.001;
+                  const price = prices[tradeSymbol] || 0;
+                  const minUsdtTotal = minCrypto * price;
+                  return `${minCrypto} ${baseAsset} (~$${minUsdtTotal.toFixed(2)} łącznej pozycji)`;
+                })()}
+              </span>
+            </div>
+            {tradeAmount && (
+              <div className="flex-between" style={{ marginTop: '4px' }}>
+                <span className="text-muted" style={{ fontSize: '11px' }}>Twoja pozycja:</span>
+                <span style={{ fontSize: '11px', color: (() => {
+                  const amt = parseFloat(tradeAmount || 0);
+                  const price = prices[tradeSymbol] || 0;
+                  const notional = tradeAmountType === 'crypto' ? (amt * price) : amt;
+                  const minUsdtTotal = (minOrderSizes?.[tradeSymbol] || 0.001) * price;
+                  return notional >= minUsdtTotal ? 'var(--success)' : 'var(--danger)';
+                })() }}>
+                  {(() => {
+                    const amt = parseFloat(tradeAmount || 0);
+                    const price = prices[tradeSymbol] || 0;
+                    const notional = tradeAmountType === 'crypto' ? (amt * price) : amt;
+                    const cryptoEquiv = tradeAmountType === 'crypto' ? amt : (amt / price);
+                    return `${cryptoEquiv.toFixed(4)} ${baseAsset} (~$${notional.toFixed(2)})`;
+                  })()}
+                </span>
+              </div>
+            )}
           </div>
 
           <button 

@@ -35,6 +35,11 @@ async def startup_event():
     """Initialize database schemas and start background services."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        try:
+            from sqlalchemy import text
+            await conn.execute(text("ALTER TABLE wallets ADD COLUMN wallet_type VARCHAR DEFAULT 'SPOT';"))
+        except Exception as e:
+            pass # ignore if already exists
     
     # Initialize background market data and order engine tasks
     asyncio.create_task(market_data_service.start_fetching_task())

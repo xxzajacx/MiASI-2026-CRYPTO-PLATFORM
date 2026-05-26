@@ -48,6 +48,14 @@ const LoginForm = ({ username, setUsername, password, handlePasswordChange, erro
       >
         Nie masz konta? Zarejestruj się
       </button>
+      <button 
+        type="button" 
+        className="btn" 
+        style={{ marginTop: '4px', fontSize: '12px', color: 'var(--text-muted)' }} 
+        onClick={() => setStage('RESET_PASSWORD')}
+      >
+        Zapomniałeś hasła? Zmień za pomocą TOTP
+      </button>
     </form>
   );
 };

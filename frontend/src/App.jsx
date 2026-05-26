@@ -32,13 +32,17 @@ import Transactions from './components/Transactions';
 import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
 import TwoFAVerify from './components/TwoFAVerify';
+import ResetPasswordForm from './components/ResetPasswordForm';
 import DepositModal from './components/DepositModal';
 import TradeModal from './components/TradeModal';
 import SettingsPanel from './components/SettingsPanel';
 import UserPanelModal from './components/UserPanelModal';
 import AdminPanelModal from './components/AdminPanelModal';
+import FluidBackground from './components/FluidBackground';
 
 const API_URL = 'http://localhost:8000/api';
+
+
 
 function App() {
   // Navigation stage: LOGIN -> REGISTER -> QR -> 2FA -> DASHBOARD
@@ -154,10 +158,13 @@ function App() {
           axios.get(`${API_URL}/market/status`)
         ]);
         
-        if (pricesRes.data.prices) setPrices(pricesRes.data.prices);
-        setWallet(walletRes.data.items || []);
-        setOrders(ordersRes.data.items || []);
-        setHistory(historyRes.data.items || []);
+        if (pricesRes.data && typeof pricesRes.data === 'object') {
+          // Backend returns Dict[str, float] directly
+          setPrices(pricesRes.data);
+        }
+        setWallet(Array.isArray(walletRes.data) ? walletRes.data : (walletRes.data.items || []));
+        setOrders(Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data.items || []));
+        setHistory(Array.isArray(historyRes.data) ? historyRes.data : (historyRes.data.items || []));
         setSystemStatus(statusRes.data);
         setMarketStatus(statusRes.data.status);
         if (statusRes.data.min_order_sizes) setMinOrderSizes(statusRes.data.min_order_sizes);
@@ -242,6 +249,24 @@ function App() {
       setStage('2FA');
     } catch (err) {
       setErrorMsg(err.response?.data?.detail || 'Błędny login lub hasło');
+    }
+  };
+
+  const handleResetPassword = async (e, code) => {
+    e.preventDefault();
+    setErrorMsg('');
+    try {
+      await axios.post(`${API_URL}/auth/reset-password`, {
+        username,
+        totp_code: code,
+        new_password: password
+      });
+      alert('Hasło zostało pomyślnie zmienione! Możesz się teraz zalogować.');
+      setStage('LOGIN');
+      setPassword('');
+      setPasswordScore(0);
+    } catch (err) {
+      setErrorMsg(err.response?.data?.detail || 'Błąd resetowania hasła');
     }
   };
 
@@ -354,12 +379,14 @@ function App() {
 
   if (stage !== 'DASHBOARD') {
     return (
-      <div className="layout flex-column" style={{ justifyContent: 'center', alignItems: 'center', height: '100vh', padding: 0 }}>
-        <div className="glass-panel animate-fade-in" style={{ width: '400px', textAlign: 'center' }}>
-          <div style={{ marginBottom: '24px' }}>
-            <h1 className="text-gradient" style={{ fontSize: '32px', marginBottom: '8px' }}>Giełda Premium</h1>
-            <p className="text-muted">Inwestuj inteligentnie dzięki automatyzacji.</p>
-          </div>
+      <>
+        <FluidBackground />
+        <div className="layout flex-column" style={{ justifyContent: 'center', alignItems: 'center', height: '100vh', padding: 0 }}>
+          <div className="glass-panel animate-fade-in" style={{ width: '400px', textAlign: 'center', position: 'relative', zIndex: 10 }}>
+            <div style={{ marginBottom: '24px' }}>
+              <h1 className="text-gradient" style={{ fontSize: '32px', marginBottom: '8px' }}>Giełda Premium</h1>
+              <p className="text-muted">Inwestuj inteligentnie dzięki automatyzacji.</p>
+            </div>
            
           {errorMsg && <div style={{ color: 'var(--danger)', marginBottom: '12px', fontSize: '14px' }}>{errorMsg}</div>}
 
@@ -396,6 +423,19 @@ function App() {
             />
           )}
 
+          {stage === 'RESET_PASSWORD' && (
+            <ResetPasswordForm
+              username={username}
+              setUsername={setUsername}
+              password={password}
+              handlePasswordChange={handlePasswordChange}
+              passwordScore={passwordScore}
+              errorMsg={errorMsg}
+              handleResetPassword={handleResetPassword}
+              setStage={setStage}
+            />
+          )}
+
           {stage === 'QR' && (
             <RegisterForm 
               qrUrl={qrUrl}
@@ -419,12 +459,15 @@ function App() {
           )}
         </div>
       </div>
+      </>
     );
   }
 
   return (
-    <div className="layout animate-fade-in">
-      <Header 
+    <>
+      <FluidBackground />
+      <div className="layout animate-fade-in" style={{ position: 'relative', zIndex: 10 }}>
+        <Header 
         systemStatus={systemStatus} 
         handleLogout={handleLogout} 
         setShowUserPanel={setShowUserPanel} 
@@ -441,6 +484,7 @@ function App() {
           tradeSymbol={tradeSymbol}
           setTradeSymbol={setTradeSymbol}
           setShowTradeModal={setShowTradeModal}
+          isAdmin={isAdmin}
         />
 
         {/* Portfolio Widget */}
@@ -448,6 +492,8 @@ function App() {
           wallet={wallet}
           prices={prices}
           setShowDepositModal={setShowDepositModal}
+          isAdmin={isAdmin}
+          systemStatus={systemStatus}
         />
 
         {/* Orders Panel */}
@@ -475,39 +521,43 @@ function App() {
         setShowAdminPanel={setShowAdminPanel} 
         token={accessToken} 
       />
-      <DepositModal 
-        showDepositModal={showDepositModal}
-        setShowDepositModal={setShowDepositModal}
-        depositAsset={depositAsset}
-        setDepositAsset={setDepositAsset}
-        depositAmount={depositAmount}
-        setDepositAmount={setDepositAmount}
-        handleDeposit={handleDeposit}
-      />
+      {!isAdmin && !systemStatus?.binance_connected && (
+        <DepositModal 
+          showDepositModal={showDepositModal}
+          setShowDepositModal={setShowDepositModal}
+          depositAsset={depositAsset}
+          setDepositAsset={setDepositAsset}
+          depositAmount={depositAmount}
+          setDepositAmount={setDepositAmount}
+          handleDeposit={handleDeposit}
+        />
+      )}
 
-      <TradeModal 
-        showTradeModal={showTradeModal}
-        setShowTradeModal={setShowTradeModal}
-        tradeSymbol={tradeSymbol}
-        setTradeSymbol={setTradeSymbol}
-        tradeSide={tradeSide}
-        setTradeSide={setTradeSide}
-        tradeAmount={tradeAmount}
-        setTradeAmount={setTradeAmount}
-        tradeAmountType={tradeAmountType}
-        setTradeAmountType={setTradeAmountType}
-        tradeSL={tradeSL}
-        setTradeSL={setTradeSL}
-        tradeTP={tradeTP}
-        setTradeTP={setTradeTP}
-        tradeLeverage={tradeLeverage}
-        setTradeLeverage={setTradeLeverage}
-        prices={prices}
-        minOrderSizes={minOrderSizes}
-        handleMarketTrade={handleMarketTrade}
-        wallet={wallet}
-        setErrorMsg={setErrorMsg}
-      />
+      {!isAdmin && (
+        <TradeModal 
+          showTradeModal={showTradeModal}
+          setShowTradeModal={setShowTradeModal}
+          tradeSymbol={tradeSymbol}
+          setTradeSymbol={setTradeSymbol}
+          tradeSide={tradeSide}
+          setTradeSide={setTradeSide}
+          tradeAmount={tradeAmount}
+          setTradeAmount={setTradeAmount}
+          tradeAmountType={tradeAmountType}
+          setTradeAmountType={setTradeAmountType}
+          tradeSL={tradeSL}
+          setTradeSL={setTradeSL}
+          tradeTP={tradeTP}
+          setTradeTP={setTradeTP}
+          tradeLeverage={tradeLeverage}
+          setTradeLeverage={setTradeLeverage}
+          prices={prices}
+          minOrderSizes={minOrderSizes}
+          handleMarketTrade={handleMarketTrade}
+          wallet={wallet}
+          setErrorMsg={setErrorMsg}
+        />
+      )}
 
       {/* Email Confirmation Modal for high-value trades */}
       {showConfirmModal && (
@@ -548,6 +598,7 @@ function App() {
         </div>
       )}
     </div>
+    </>
   );
 }
 
